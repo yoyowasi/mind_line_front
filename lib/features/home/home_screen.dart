@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 
 import '../../core/services/api_service.dart';
 
@@ -34,7 +36,22 @@ class HomeScreen extends StatelessWidget {
               label: const Text('내 일기 보기'),
               onPressed: () => context.push('/diary/list'),
             ),
+            /*ElevatedButton(
+              child: Text("테스트"),
+              onPressed: () async {
+                final user = FirebaseAuth.instance.currentUser;
+                final String? idToken = await user?.getIdToken(true);
+                if (idToken == null) return;
 
+                final response = await http.get(
+                  Uri.parse('http://localhost:8080/api/hello'),
+                  headers: {
+                    'Authorization': 'Bearer $idToken',
+                  },
+                );
+                print(response.body);
+              },
+            ),*/
 
             const SizedBox(height: 32),
             ElevatedButton.icon(
