@@ -1,51 +1,82 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../core/services/api_service.dart';
-
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late Timer _timer;
+  late List<Color> _currentGradient;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentGradient = _getGradientByTime();
+    _startGradientUpdater();
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  void _startGradientUpdater() {
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      setState(() {
+        _currentGradient = _getGradientByTime();
+      });
+    });
+  }
+
+  List<Color> _getGradientByTime() {
+    final hour = DateTime.now().hour;
+
+    if (hour >= 0 && hour < 6) {
+      return [Colors.indigo[900]!, Colors.black];
+    } else if (hour >= 6 && hour < 12) {
+      return [Colors.lightBlue[100]!, Colors.blue[200]!];
+    } else if (hour >= 12 && hour < 18) {
+      return [Colors.white, Colors.blueGrey[50]!];
+    } else if (hour >= 18 && hour < 21) {
+      return [Colors.orange[200]!, Colors.deepOrange[300]!];
+    } else {
+      return [Colors.blueGrey[900]!, Colors.indigo[800]!];
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('AI 감정 일기'),
+    return AnimatedContainer(
+      duration: const Duration(seconds: 2),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: _currentGradient,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
       ),
-      body: Padding(
+      child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ElevatedButton.icon(
-              icon: const Icon(Icons.edit),
-              label: const Text('일기 쓰기'),
-              onPressed: () => context.push('/diary'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              '오늘은 어떠신가요?',
+              style: TextStyle(fontSize: 22, color: Colors.white),
             ),
-            const SizedBox(height: 16),
-
-            ElevatedButton.icon(
-              icon: const Icon(Icons.pie_chart),
-              label: const Text('감정 통계 보기'),
-              onPressed: () => context.push('/stats'),
-            ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.list),
-              label: const Text('내 일기 보기'),
-              onPressed: () => context.push('/diary/list'),
-            ),
-
-
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.logout),
-              label: const Text('로그아웃'),
-              onPressed: () async {
-                await AuthService.logout();
-                context.go('/login'); // 로그인 화면으로 이동
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+            SizedBox(height: 16),
+            TextField(
+              maxLines: 5,
+              decoration: InputDecoration(
+                hintText: '오늘 하루의 감정을 적어보세요...',
+                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: Colors.white,
               ),
             ),
           ],
