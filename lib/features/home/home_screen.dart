@@ -54,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = FirebaseAuth.instance.currentUser;
     final idToken = await user?.getIdToken();
 
-    final url = Uri.parse('http://<YOUR_SPRING_SERVER_IP>:8080/api/ask');
+    final url = Uri.parse('http://loaclhost:8080/api/ask');
 
     final response = await http.post(
       url,
