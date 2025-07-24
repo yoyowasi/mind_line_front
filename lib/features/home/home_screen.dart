@@ -51,20 +51,27 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<String> fetchAiResponse(String userMessage) async {
-    final url = Uri.parse('http://localhost:8080/gemini/ask');
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+
+    final url = Uri.parse('http://<YOUR_SPRING_SERVER_IP>:8080/api/ask');
 
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $idToken',
+      },
       body: jsonEncode({'message': userMessage}),
     );
 
     if (response.statusCode == 200) {
       return response.body;
     } else {
-      throw Exception('AI 응답 실패: ${response.statusCode}');
+      throw Exception('AI 응답 실패: ${response.statusCode} ${response.body}');
     }
   }
+
 
   Future<void> _sendMessage() async {
     final userMessage = _controller.text.trim();
