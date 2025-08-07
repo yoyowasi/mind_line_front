@@ -18,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   User? _user;
-  int _selectedIndex = 3;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
