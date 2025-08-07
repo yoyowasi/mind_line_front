@@ -46,7 +46,7 @@ class ChatTabState extends State<ChatTab> {
   Future<String> fetchAiResponse({String? text, File? imageFile}) async {
     final user = FirebaseAuth.instance.currentUser;
     final idToken = await user?.getIdToken();
-    final url = Uri.parse('http://localhost:8080/api/gemini/ask-image');
+    final url = Uri.parse('http://localhost:8080/api/gemini/ask');
 
     final request = http.MultipartRequest('POST', url);
     request.headers['Authorization'] = 'Bearer $idToken';
