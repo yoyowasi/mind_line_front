@@ -30,6 +30,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_tts: ^3.6.3
+  image_picker: ^1.0.4
+  speech_to_text: ^6.3.0
 
   # Firebase
   firebase_core: ^2.30.0

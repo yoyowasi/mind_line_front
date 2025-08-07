@@ -3,10 +3,10 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
-import '../features/home/home_screen.dart';
 import '../features/diary/diary_screen.dart';
 import '../features/diary/diary_list_screen.dart';
 import '../features/diary/emotion_stats_screen.dart';
+import '../home/home_screen.dart';
 
 final GoRouter appRoutes = GoRouter(
   redirect: (context, state) {
