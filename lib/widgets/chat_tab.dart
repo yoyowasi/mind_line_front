@@ -1,4 +1,3 @@
-// lib/widgets/chat_tab.dart
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,26 +5,31 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 class ChatTab extends StatefulWidget {
   const ChatTab({super.key});
 
   @override
-  State<ChatTab> createState() => _ChatTabState();
+  State<ChatTab> createState() => ChatTabState();
 }
 
-class _ChatTabState extends State<ChatTab> {
+class ChatTabState extends State<ChatTab> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, String>> _messages = [];
   bool _loading = false;
 
   final ImagePicker _picker = ImagePicker();
-  final FlutterTts _flutterTts = FlutterTts();
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _isListening = false;
+
+  /// 외부에서 호출 가능한 리셋 함수
+  void resetMessages() {
+    setState(() {
+      _messages.clear();
+    });
+  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -39,19 +43,25 @@ class _ChatTabState extends State<ChatTab> {
     });
   }
 
-  Future<String> fetchAiResponse(String userMessage) async {
+  Future<String> fetchAiResponse({String? text, File? imageFile}) async {
     final user = FirebaseAuth.instance.currentUser;
     final idToken = await user?.getIdToken();
-    final url = Uri.parse('http://localhost:8080/api/gemini/ask');
+    final url = Uri.parse('http://localhost:8080/api/gemini/ask-image');
 
-    final response = await http.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $idToken',
-      },
-      body: jsonEncode({'message': userMessage}),
-    );
+    final request = http.MultipartRequest('POST', url);
+    request.headers['Authorization'] = 'Bearer $idToken';
+
+    if (text != null && text.isNotEmpty) {
+      request.fields['message'] = text;
+    }
+
+    if (imageFile != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath('image', imageFile.path),
+      );
+    }
+
+    final response = await http.Response.fromStream(await request.send());
 
     if (response.statusCode == 200) {
       return response.body;
@@ -60,16 +70,14 @@ class _ChatTabState extends State<ChatTab> {
     }
   }
 
-  Future<void> _sendMessage({String? text, String? imageUrl}) async {
-    if (text == null && imageUrl == null) return;
-
-    if (text != null && text.trim().isEmpty) return;
+  Future<void> _sendMessage({String? text, File? imageFile}) async {
+    if ((text == null || text.trim().isEmpty) && imageFile == null) return;
 
     setState(() {
       _messages.add({
         'role': 'user',
-        'content': text ?? '[이미지 전송됨]',
-        'type': imageUrl != null ? 'image' : 'text'
+        'content': imageFile?.path ?? text!,
+        'type': imageFile != null ? 'image' : 'text',
       });
       _controller.clear();
       _loading = true;
@@ -78,14 +86,24 @@ class _ChatTabState extends State<ChatTab> {
     _scrollToBottom();
 
     try {
-      final aiResponse = await fetchAiResponse(text ?? '[이미지에 대한 설명 없음]');
+      final aiResponse = await fetchAiResponse(
+        text: text,
+        imageFile: imageFile,
+      );
       setState(() {
-        _messages.add({'role': 'assistant', 'content': aiResponse, 'type': 'text'});
+        _messages.add({
+          'role': 'assistant',
+          'content': aiResponse,
+          'type': 'text',
+        });
       });
-      await _flutterTts.speak(aiResponse);
     } catch (e) {
       setState(() {
-        _messages.add({'role': 'assistant', 'content': 'AI 응답 오류: $e', 'type': 'text'});
+        _messages.add({
+          'role': 'assistant',
+          'content': 'AI 응답 오류: $e',
+          'type': 'text',
+        });
       });
     } finally {
       setState(() => _loading = false);
@@ -96,7 +114,7 @@ class _ChatTabState extends State<ChatTab> {
   Future<void> _pickImage() async {
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      await _sendMessage(imageUrl: pickedFile.path);
+      await _sendMessage(imageFile: File(pickedFile.path));
     }
   }
 
@@ -218,7 +236,6 @@ class _ChatTabState extends State<ChatTab> {
                 ),
               ),
               const SizedBox(width: 8),
-
               InkWell(
                 onTap: () => _sendMessage(text: _controller.text),
                 child: const CircleAvatar(

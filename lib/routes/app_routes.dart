@@ -9,6 +9,7 @@ import '../features/diary/emotion_stats_screen.dart';
 import '../home/home_screen.dart';
 
 final GoRouter appRoutes = GoRouter(
+  initialLocation: '/main', // ✅ 앱 시작 화면을 사이드바 기반으로
   redirect: (context, state) {
     final isLoggedIn = FirebaseAuth.instance.currentUser != null;
     final isLoggingIn = state.uri.toString() == '/login' || state.uri.toString() == '/register';
@@ -23,7 +24,7 @@ final GoRouter appRoutes = GoRouter(
   routes: [
     GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
     GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
-    GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
+    GoRoute(path: '/home', builder: (_, __) => const HomeScreen()), // ✅ 탭 기반 홈
     GoRoute(path: '/diary', builder: (_, __) => const DiaryScreen()),
     GoRoute(path: '/diary/list', builder: (_, __) => const DiaryListScreen()),
     GoRoute(path: '/stats', builder: (_, __) => const EmotionStatsScreen()),
