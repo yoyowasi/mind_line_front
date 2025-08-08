@@ -17,6 +17,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GlobalKey<ChatTabState> _chatTabKey = GlobalKey<ChatTabState>();
+  late final List<Widget> _tabWidgets;
+
   User? _user;
   int _selectedIndex = 0;
 
@@ -35,6 +38,13 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _user = _auth.currentUser;
+
+    _tabWidgets = [
+      ChatTab(key: _chatTabKey),
+      const ScheduleTab(),
+      const ExpenseTab(),
+      const DaliyTab(),
+    ];
   }
 
   Future<void> _logout() async {
@@ -42,10 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) context.go('/login');
   }
 
-  Widget _buildTabView() {
+  /*Widget _buildTabView() {
     switch (_selectedIndex) {
       case 0:
-        return const ChatTab();
+        return ChatTab(key: _chatTabKey);
       case 1:
         return const ScheduleTab();
       case 2:
@@ -55,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         return Center(child: Text('${_titles[_selectedIndex]} (미구현)'));
     }
-  }
+  }*/
 
   void _selectFromDrawer(int index) {
     Navigator.pop(context); // 사이드바 닫기
@@ -79,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
             IconButton(
               icon: const Icon(Icons.refresh, color: Colors.white),
               onPressed: () {
-                // ChatTab에서 메시지 초기화할 수 있음
+                _chatTabKey.currentState?.resetMessages();
               },
               tooltip: '새로고침',
             ),
@@ -146,7 +156,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
 
-      body: SafeArea(child: _buildTabView()),
+      //body: SafeArea(child: _buildTabView()),
+      body: SafeArea(
+          child: IndexedStack(
+            index: _selectedIndex,
+            children: _tabWidgets,
+          )
+      ),
 
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex > 3 ? 0 : _selectedIndex, // 탭 범위 제한

@@ -28,8 +28,11 @@ class ChatTabState extends State<ChatTab> {
   void resetMessages() {
     setState(() {
       _messages.clear();
+      _controller.clear();
     });
   }
+
+
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
