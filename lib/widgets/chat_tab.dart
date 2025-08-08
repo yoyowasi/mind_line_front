@@ -46,29 +46,39 @@ class ChatTabState extends State<ChatTab> {
   Future<String> fetchAiResponse({String? text, File? imageFile}) async {
     final user = FirebaseAuth.instance.currentUser;
     final idToken = await user?.getIdToken();
-    final url = Uri.parse('http://localhost:8080/api/gemini/ask-image');
-
-    final request = http.MultipartRequest('POST', url);
-    request.headers['Authorization'] = 'Bearer $idToken';
-
-    if (text != null && text.isNotEmpty) {
-      request.fields['message'] = text;
-    }
 
     if (imageFile != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath('image', imageFile.path),
-      );
-    }
+      // Multipart 요청
+      final url = Uri.parse('http://localhost:8080/api/gemini/ask-image');
+      final request = http.MultipartRequest('POST', url);
+      request.headers['Authorization'] = 'Bearer $idToken';
+      request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
 
-    final response = await http.Response.fromStream(await request.send());
-
-    if (response.statusCode == 200) {
-      return response.body;
+      final response = await http.Response.fromStream(await request.send());
+      if (response.statusCode == 200) {
+        return response.body;
+      } else {
+        throw Exception('AI 응답 실패: ${response.statusCode} ${response.body}');
+      }
     } else {
-      throw Exception('AI 응답 실패: ${response.statusCode} ${response.body}');
+      // JSON 요청
+      final url = Uri.parse('http://localhost:8080/api/gemini/ask');
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $idToken',
+        },
+        body: jsonEncode({'message': text}),
+      );
+      if (response.statusCode == 200) {
+        return response.body;
+      } else {
+        throw Exception('AI 응답 실패: ${response.statusCode} ${response.body}');
+      }
     }
   }
+
 
   Future<void> _sendMessage({String? text, File? imageFile}) async {
     if ((text == null || text.trim().isEmpty) && imageFile == null) return;
