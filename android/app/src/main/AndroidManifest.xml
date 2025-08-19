@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:label="haru_emtion_front"
-        android:name="${applicationName}"
+        android:name="${MindLine}"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
@@ -39,6 +39,7 @@
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <uses-permission android:name="android.permission.RECORD_AUDIO"/>
             <data android:mimeType="text/plain"/>
         </intent>
     </queries>
