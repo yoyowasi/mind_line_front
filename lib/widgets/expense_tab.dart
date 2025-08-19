@@ -1,11 +1,11 @@
-// schedule_tab.dart
+// expense_tab.dart
 import 'package:flutter/material.dart';
 
-class ScheduleTab extends StatelessWidget {
-  const ScheduleTab({super.key});
+class ExpenseTab extends StatelessWidget {
+  const ExpenseTab({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Center(child: Text('일정 탭'));
+    return const Center(child: Text('지출내역 탭'));
   }
 }

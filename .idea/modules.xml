@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/haru_emtion_front.iml" filepath="$PROJECT_DIR$/haru_emtion_front.iml" />
+      <module fileurl="file://$PROJECT_DIR$/android/haru_emtion_front_android.iml" filepath="$PROJECT_DIR$/android/haru_emtion_front_android.iml" />
     </modules>
   </component>
 </project>
