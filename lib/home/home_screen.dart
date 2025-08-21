@@ -58,29 +58,43 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _reloadTabs() async {
+    // 0) 리로드 직전, '지금 보고 있는 탭 ID'(임시탭 포함)를 기억
+    final beforeIds = _viewIds;
+    final currentId = (beforeIds.isNotEmpty && _currentIndex < beforeIds.length)
+        ? beforeIds[_currentIndex]
+        : null;
+
+    // 1) 저장된 설정 로드 (비어있어도 그대로 존중)
     final cfg = await TabPrefsService.load();
     if (!mounted) return;
+    final newEnabled = [...cfg.enabled];
 
-    final newEnabled = [...cfg.enabled]; // 비어있어도 그대로 존중
+    // 2) 다음 페이지/임시탭 계산
+    int nextIndex = 0;
+    String? nextEphemeral;
 
-    int nextIndex;
-    if (_anchorTabId != null) {
-      // ✅ 앵커 ID가 새 enabled에 있으면 그 인덱스로 복귀
-      final idx = newEnabled.indexOf(_anchorTabId!);
-      nextIndex = (idx >= 0) ? idx : 0;
-      _anchorTabId = null; // 한 번 쓰고 비움
+    if (currentId != null) {
+      final found = newEnabled.indexOf(currentId);
+      if (found >= 0) {
+        // 같은 탭이 여전히 enabled면 그 인덱스로 복귀
+        nextIndex = found;
+      } else {
+        // enabled에 없으면 임시탭으로 끝에 붙여서 '지금 화면' 유지
+        nextEphemeral = currentId;
+        nextIndex = newEnabled.length;
+      }
     } else {
-      // 기존 로직
-      nextIndex = _currentIndex;
-      if (nextIndex >= newEnabled.length) nextIndex = 0;
+      // currentId가 없을 때는 기존 인덱스 보정
+      nextIndex = (_currentIndex >= newEnabled.length) ? 0 : _currentIndex;
     }
 
+    // 3) 컨트롤러 교체 (화면/하이라이트 싱크를 확실히 맞춤)
     final old = _pageController;
     final newController = PageController(initialPage: nextIndex);
 
     setState(() {
       _enabled = newEnabled;
-      _ephemeralId = null;
+      _ephemeralId = nextEphemeral;
       _currentIndex = nextIndex;
       _pageController = newController;
       _loading = false;
@@ -88,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
   }
+
 
 
 
