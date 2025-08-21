@@ -38,13 +38,13 @@ final Map<String, TabDefinition> kAllTabs = {
     id: 'schedule',
     label: '일정',
     icon: Icons.calendar_month,
-    builder: (ctx) => const widgets_expense.ExpenseTab(),
+    builder: (ctx) => const widgets_schedule.ScheduleTab(),
   ),
   'expense': TabDefinition(
     id: 'expense',
     label: '지출',
     icon: Icons.attach_money,
-    builder: (ctx) => const widgets_schedule.ScheduleTab(),
+    builder: (ctx) => const widgets_expense.ExpenseTab(),
   ),
   'diary': TabDefinition(
     id: 'diary',
