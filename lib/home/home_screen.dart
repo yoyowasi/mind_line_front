@@ -27,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _enabled = [];     // 사용자 설정에서 온 탭 ID 순서
   User? _user;
   String? _ephemeralId;           // 활성 탭에 없지만 임시로 붙인 ID
+  String? _anchorTabId;
 
   @override
   void initState() {
@@ -57,30 +58,53 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _reloadTabs() async {
+    // 0) 리로드 직전, '지금 보고 있는 탭 ID'(임시탭 포함)를 기억
+    final beforeIds = _viewIds;
+    final currentId = (beforeIds.isNotEmpty && _currentIndex < beforeIds.length)
+        ? beforeIds[_currentIndex]
+        : null;
+
+    // 1) 저장된 설정 로드 (비어있어도 그대로 존중)
     final cfg = await TabPrefsService.load();
     if (!mounted) return;
-
     final newEnabled = [...cfg.enabled];
-    if (newEnabled.isEmpty) newEnabled.addAll(TabConfig.kDefault.enabled);
 
-    int nextIndex = _currentIndex;
-    if (nextIndex >= newEnabled.length) nextIndex = 0;
+    // 2) 다음 페이지/임시탭 계산
+    int nextIndex = 0;
+    String? nextEphemeral;
 
-    // 🔧 핵심: 리로드할 때도 컨트롤러 새로 생성
+    if (currentId != null) {
+      final found = newEnabled.indexOf(currentId);
+      if (found >= 0) {
+        // 같은 탭이 여전히 enabled면 그 인덱스로 복귀
+        nextIndex = found;
+      } else {
+        // enabled에 없으면 임시탭으로 끝에 붙여서 '지금 화면' 유지
+        nextEphemeral = currentId;
+        nextIndex = newEnabled.length;
+      }
+    } else {
+      // currentId가 없을 때는 기존 인덱스 보정
+      nextIndex = (_currentIndex >= newEnabled.length) ? 0 : _currentIndex;
+    }
+
+    // 3) 컨트롤러 교체 (화면/하이라이트 싱크를 확실히 맞춤)
     final old = _pageController;
     final newController = PageController(initialPage: nextIndex);
 
     setState(() {
       _enabled = newEnabled;
-      _ephemeralId = null;      // 임시탭 정리
+      _ephemeralId = nextEphemeral;
       _currentIndex = nextIndex;
-      _pageController = newController;  // 컨트롤러 교체
+      _pageController = newController;
       _loading = false;
     });
 
-    // 이전 컨트롤러는 다음 프레임에 안전하게 폐기
     WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
   }
+
+
+
 
 
   Future<void> _logout() async {
@@ -88,8 +112,19 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) context.go('/login');
   }
 
+  void _rememberAnchor() {
+    if (_enabled.isNotEmpty && _currentIndex < _enabled.length) {
+      _anchorTabId = _enabled[_currentIndex]; // 지금 보고 있는 '활성 탭' 기억
+    } else if (_enabled.isNotEmpty) {
+      _anchorTabId = _enabled.first;          // 안전장치
+    } else {
+      _anchorTabId = null;                    // 탭 0개면 앵커 없음
+    }
+  }
+
   // 사이드바에서 ID로 선택
   void _selectById(String id) {
+    _rememberAnchor();
     final inEnabled = _enabled.indexOf(id);
 
     if (inEnabled >= 0) {
@@ -132,6 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // (인덱스로도 이동 가능)
   void _selectByIndex(int index) {
+    if (_enabled.isEmpty) return; // ✅ 0개일 때 보호
     final i = index.clamp(0, _enabled.length - 1);
     _goToIndex(i);
   }
@@ -188,41 +224,79 @@ class _HomeScreenState extends State<HomeScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // 타이틀도 _viewIds 기준(임시 탭 포함)
+    // 임시탭 포함한 실제 PageView 타겟
     final idsForView = _viewIds;
+
+    // ✅ 탭이 0개일 때: 크래시 방지 + 안내 화면
+    if (idsForView.isEmpty) {
+      return TabsReloadScope(
+        onTabsReload: _reloadTabs,
+        child: Scaffold(
+          appBar: AppBar(title: const Text('DailyCircle')),
+          drawer: AppDrawer(
+            enabledIds: _enabled,
+            onSelectTabId: _selectById,
+            onTabsReload: _reloadTabs,
+          ),
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.tab_unselected, size: 48),
+                const SizedBox(height: 12),
+                const Text(
+                  '선택된 탭이 없어요.\n사이드 메뉴에서 탭을 추가해 주세요.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                // Drawer 여는 버튼은 Builder로 context 분리해서 안전하게 호출
+                Builder(
+                  builder: (ctx) => FilledButton(
+                    onPressed: () => Scaffold.of(ctx).openDrawer(),
+                    child: const Text('탭 추가하기'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // 하단바 없음
+          // floatingActionButton은 그대로 유지해도 되고 필요 없으면 제거해도 됨
+          floatingActionButton: IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+            tooltip: '로그아웃',
+          ),
+        ),
+      );
+    }
+
+    // ✅ 탭이 하나 이상일 때: 기존 흐름
     final safeIndex = _currentPageSafeIndex();
     final title = kAllTabs[idsForView[safeIndex]]!.label;
 
     return TabsReloadScope(
       onTabsReload: _reloadTabs,
       child: Scaffold(
-        appBar: AppBar(
-          title: Text('DailyCircle - $title'),
-          // 배경/글자색은 Theme(AppTheme)에서 제어 (다크/라이트 대응)
-        ),
-
+        appBar: AppBar(title: Text('DailyCircle - $title')),
         drawer: AppDrawer(
           enabledIds: _enabled,
           onSelectTabId: _selectById,
           onTabsReload: _reloadTabs,
         ),
-
         body: SafeArea(
           child: PageView(
-            key: ValueKey('pv:${_viewIds.join("|")}'), // child 목록 바뀌면 재구성
+            key: ValueKey('pv:${idsForView.join("|")}'),
             controller: _pageController,
             onPageChanged: (i) {
               setState(() {
                 _currentIndex = i;
-                // 임시 탭에서 활성 탭(앞쪽)으로 이동하면 임시 탭 제거
                 if (_ephemeralId != null && i < _enabled.length) {
                   _ephemeralId = null;
                 }
               });
             },
-            // 각 페이지에도 키 부여
             children: [
-              for (final id in _viewIds)
+              for (final id in idsForView)
                 KeyedSubtree(
                   key: ValueKey('page-$id'),
                   child: kAllTabs[id]!.builder(context),
@@ -230,9 +304,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-
+        // 🔥 빠졌던 부분 다시 추가
         bottomNavigationBar: _buildBottomBar(),
-        floatingActionButton: IconButton( // 로그아웃은 액션 버튼으로 유지
+        floatingActionButton: IconButton(
           icon: const Icon(Icons.logout),
           onPressed: _logout,
           tooltip: '로그아웃',

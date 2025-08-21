@@ -79,7 +79,9 @@ class _TabCustomizePageState extends State<TabCustomizePage> {
             }
           }
           // If empty, use default
-          _enabled = fromSaved.isEmpty ? [...TabConfig.kDefault.enabled] : fromSaved;
+          // _enabled = fromSaved.isEmpty ? [...TabConfig.kDefault.enabled] : fromSaved;
+           _enabled = fromSaved;
+
           _initialized = true;
         }
 

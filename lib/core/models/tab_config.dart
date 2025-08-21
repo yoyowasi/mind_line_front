@@ -1,16 +1,12 @@
 import 'dart:convert';
 
-/// V2: single ordered list of enabled tab IDs.
-/// The BottomNavigationBar always shows the first 4 of this list.
 class TabConfig {
-  final List<String> enabled; // ordered
-
+  final List<String> enabled;
   const TabConfig({required this.enabled});
 
   TabConfig copyWith({List<String>? enabled}) => TabConfig(enabled: enabled ?? this.enabled);
 
   Map<String, dynamic> toMap() => {'enabled': enabled};
-
   String toJson() => jsonEncode(toMap());
 
   static TabConfig fromMap(Map<String, dynamic> map) {
@@ -22,8 +18,8 @@ class TabConfig {
 
   static const int bottomBaseCount = 4;
 
-  /// Default order: 4 base + a few more.
+  // ✅ 기본값은 4개
   static const TabConfig kDefault = TabConfig(
-    enabled: ['chat', 'schedule', 'expense', 'diary', 'calendar', 'analytics', 'settings'],
+    enabled: ['chat', 'schedule', 'expense', 'diary'],
   );
 }
