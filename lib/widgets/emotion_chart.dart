@@ -27,12 +27,19 @@ class EmotionChart extends StatelessWidget {
       child: PieChart(
         PieChartData(
           sections: emotionCount.entries.map((e) {
-            final percent = (e.value / total * 100).toStringAsFixed(1);
+            final percent = total > 0 ? (e.value / total * 100) : 0;
+            final color = Color(e.key.hashCode | 0xFF000000).withOpacity(1.0);
+
             return PieChartSectionData(
-              title: '${e.key} ($percent%)',
+              color: color,
               value: e.value.toDouble(),
+              title: '${e.key} (${percent.toStringAsFixed(1)}%)',
               radius: 80,
-              titleStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              titleStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             );
           }).toList(),
         ),

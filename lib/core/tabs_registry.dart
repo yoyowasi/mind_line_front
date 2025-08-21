@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import '../core/models/tab_config.dart';
 
 // Import your tab pages (adjust paths if needed)
-import '../tabs/analytics_tab.dart';
-import '../tabs/calendar_tab.dart';
-import '../tabs/diary_tab.dart';
-import '../tabs/expense_tab.dart' as tabs_expense; // avoid clash with widgets/expense_tab
-import '../tabs/schedule_tab.dart';
-import '../tabs/settings_tab.dart';
+import '../widgets/analytics_tab.dart';
+import '../widgets/calendar_tab.dart';
+import '../widgets/settings_tab.dart';
 
 // Widgets in widgets/
 import '../widgets/chat_tab.dart' as widgets_chat;
