@@ -7,12 +7,15 @@ class AppDrawer extends StatelessWidget {
   final List<String> enabledIds;
   final void Function(String id)? onSelectTabId;
   final Future<void> Function()? onTabsReload;
+  final Future<void> Function() onLogout; // ✅ 추가
+
 
   const AppDrawer({
     super.key,
     required this.enabledIds,
     this.onSelectTabId,
     this.onTabsReload,
+    required this.onLogout, // ✅ 추가
   });
 
   @override
@@ -38,6 +41,15 @@ class AppDrawer extends StatelessWidget {
                 iconColor: enabledIds.contains(id) ? null : Colors.grey,
                 textColor: enabledIds.contains(id) ? null : Colors.grey,
               ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('로그아웃'),
+              onTap: () async {
+                Navigator.of(context).pop(); // Drawer 먼저 닫고
+                await onLogout();            // 실제 로그아웃 실행
+              },
+            ),
+
           ],
         ),
       ),
