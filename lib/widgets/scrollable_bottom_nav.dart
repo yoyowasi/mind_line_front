@@ -22,12 +22,22 @@ class _ScrollableBottomNavState extends State<ScrollableBottomNav> {
 
   @override
   void dispose() {
-    _scroll.dispose();                      // ✅ 누수 방지
+    _scroll.dispose();
     super.dispose();
   }
 
+  // ✅ 탭 1~3개: 전폭/탭수, 4개: 전폭/4, 5개~: 전폭/4 + 스크롤
+  double _itemWidth(BuildContext context) {
+    final count = widget.enabledIds.length;
+    final slots = count < 4 ? count : 4;
+    final width = MediaQuery.of(context).size.width;
+    return slots == 0 ? width : width / slots;
+  }
+
+  bool get _needsScroll => widget.enabledIds.length > 4;
+
   void _ensureVisible(int i, double itemWidth) {
-    if (!_scroll.hasClients) return;
+    if (!_scroll.hasClients || !_needsScroll) return; // ✅ 5개 이상일 때만 스크롤 보정
     final viewport = _scroll.position.viewportDimension;
     final targetLeft = i * itemWidth;
     final targetRight = targetLeft + itemWidth;
@@ -42,11 +52,9 @@ class _ScrollableBottomNavState extends State<ScrollableBottomNav> {
   @override
   void didUpdateWidget(covariant ScrollableBottomNav oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // ✅ 선택 없음(-1)일 때는 스크롤 맞추지 않음
-    if (oldWidget.currentIndex != widget.currentIndex && widget.currentIndex >= 0) {
+    if (oldWidget.currentIndex != widget.currentIndex && widget.currentIndex >= 0 && _needsScroll) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final w = MediaQuery.of(context).size.width / 4;
-        _ensureVisible(widget.currentIndex, w);
+        _ensureVisible(widget.currentIndex, _itemWidth(context));
       });
     }
   }
@@ -54,23 +62,22 @@ class _ScrollableBottomNavState extends State<ScrollableBottomNav> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (widget.currentIndex >= 0) {
+    if (widget.currentIndex >= 0 && _needsScroll) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final w = MediaQuery.of(context).size.width / 4;
-        _ensureVisible(widget.currentIndex, w);
+        _ensureVisible(widget.currentIndex, _itemWidth(context));
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 빈 리스트면 바로 리턴 (드물지만 방어)
     if (widget.enabledIds.isEmpty) {
       return const SizedBox.shrink();
     }
+
     final themeColor = Theme.of(context).colorScheme.primary;
-    final itemWidth = MediaQuery.of(context).size.width / 4;
-    final noneSelected = widget.currentIndex < 0;               // ✅ 선택 없음 여부
+    final itemWidth = _itemWidth(context);
+    final noneSelected = widget.currentIndex < 0;
 
     return Material(
       elevation: 8,
@@ -81,6 +88,7 @@ class _ScrollableBottomNavState extends State<ScrollableBottomNav> {
           child: ListView.builder(
             controller: _scroll,
             scrollDirection: Axis.horizontal,
+            physics: _needsScroll ? null : const NeverScrollableScrollPhysics(), // ✅ 4개 이하면 스크롤 OFF
             itemCount: widget.enabledIds.length,
             itemBuilder: (context, i) {
               final id = widget.enabledIds[i];
@@ -92,7 +100,7 @@ class _ScrollableBottomNavState extends State<ScrollableBottomNav> {
               return InkWell(
                 onTap: () => widget.onTap(i),
                 child: SizedBox(
-                  width: itemWidth,
+                  width: itemWidth, // ✅ 가변 폭
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -105,15 +113,19 @@ class _ScrollableBottomNavState extends State<ScrollableBottomNav> {
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(def.icon, color: color, size: selected ? 24 : 22),
                             const SizedBox(width: 6),
-                            Text(
-                              def.label,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                color: color,
+                            Flexible( // ✅ 라벨 길어도 줄바꿈/흘러넘침 방지
+                              child: Text(
+                                def.label,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                  color: color,
+                                ),
                               ),
                             ),
                           ],
