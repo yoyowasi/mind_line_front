@@ -9,6 +9,9 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../features/diary/diary_controller.dart';
+import 'emotion_chart.dart';
+
 /// 저장소 키들 (존재하면 읽고, 없으면 스킵)
 const _kTodosKey = 'todos.v1';
 const _kDiaryKey = 'diary.v1';
