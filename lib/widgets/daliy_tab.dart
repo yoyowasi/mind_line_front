@@ -99,9 +99,6 @@ class DaliyTab extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        '신뢰도: ${(controller.entries.first.confidence * 100).toStringAsFixed(1)}%',
-                      ),
                       const Divider(height: 20),
                       Text(controller.entries.first.text),
                     ],

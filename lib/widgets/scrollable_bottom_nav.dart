@@ -43,8 +43,11 @@ class _ScrollableBottomNavState extends State<ScrollableBottomNav> {
     final targetRight = targetLeft + itemWidth;
     final current = _scroll.offset;
     double next = current;
-    if (targetLeft < current) next = targetLeft;
-    else if (targetRight > current + viewport) next = targetRight - viewport;
+    if (targetLeft < current) {
+      next = targetLeft;
+    } else if (targetRight > current + viewport) {
+      next = targetRight - viewport;
+    }
     next = next.clamp(0, _scroll.position.maxScrollExtent);
     _scroll.animateTo(next, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
   }
@@ -95,7 +98,7 @@ class _ScrollableBottomNavState extends State<ScrollableBottomNav> {
               final def = kAllTabs[id]!;
               final selected = !noneSelected && i == widget.currentIndex;
               final color = selected ? themeColor : Colors.grey;
-              final pillBg = selected ? themeColor.withOpacity(0.10) : Colors.transparent;
+              final pillBg = selected ? themeColor.withAlpha(26) : Colors.transparent;
 
               return InkWell(
                 onTap: () => widget.onTap(i),
