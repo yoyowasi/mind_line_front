@@ -17,7 +17,8 @@ class ChatTab extends StatefulWidget {
   State<ChatTab> createState() => ChatTabState();
 }
 
-class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin{
+class ChatTabState extends State<ChatTab>
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   final _controller = TextEditingController();
   final _focus = FocusNode();
   final _picker = ImagePicker();
@@ -25,9 +26,9 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
 
   bool _loading = false;
   bool _listening = false;
-  String? _resultText;          // 응답/오류
+  String? _resultText; // 응답/오류
   bool _resultIsError = false;
-  File? _lastImage;             // 최근 보낸 이미지(미리보기)
+  File? _lastImage; // 최근 보낸 이미지(미리보기)
   Timer? _debounce;
 
   // send 버튼 살짝 펄스
@@ -103,8 +104,10 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
   void _loadCache() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anon';
     final ps = PageStorage.of(context);
-    _cachedLastText = ps.readState(context, identifier: 'chat.$uid.lastText') as String?;
-    _cachedLastImagePath = ps.readState(context, identifier: 'chat.$uid.lastImage') as String?;
+    _cachedLastText =
+    ps.readState(context, identifier: 'chat.$uid.lastText') as String?;
+    _cachedLastImagePath =
+    ps.readState(context, identifier: 'chat.$uid.lastImage') as String?;
   }
 
   @override
@@ -114,17 +117,18 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
   }
 
   Widget _previousAnswerBanner(ColorScheme cs) {
-    final hasPrev = (_cachedLastText != null && _cachedLastText!.trim().isNotEmpty);
+    final hasPrev =
+    (_cachedLastText != null && _cachedLastText!.trim().isNotEmpty);
     final shouldShow = !_loading && _resultText == null && hasPrev;
 
     if (!shouldShow) return const SizedBox.shrink();
 
     final preview = _cachedLastText!;
-    final short = preview.length > 60 ? '${preview.substring(0, 60)}…' : preview;
+    final short =
+    preview.length > 60 ? '${preview.substring(0, 60)}…' : preview;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-
       child: _Glass(
         radius: 16,
         padding: const EdgeInsets.all(12),
@@ -135,7 +139,8 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
             Expanded(
               child: Text(
                 '이전 답변: $short',
-                style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
+                style:
+                TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -145,7 +150,8 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                 setState(() {
                   _resultText = _cachedLastText;
                   _resultIsError = false;
-                  _lastImage = (_cachedLastImagePath != null && _cachedLastImagePath!.isNotEmpty)
+                  _lastImage = (_cachedLastImagePath != null &&
+                      _cachedLastImagePath!.isNotEmpty)
                       ? File(_cachedLastImagePath!)
                       : null;
                 });
@@ -171,28 +177,47 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
     );
   }
 
+  // -------------------- 백엔드 URL 보정 --------------------
+  // http 패키지는 "절대 URL"만 허용합니다. (scheme 포함: http/https)
+  // Config.apiBase가 'localhost:8080' 같은 형식이면 아래에서 http:// 를 붙여 절대 URL로 만듭니다.
+  Uri _buildUrl(String path) {
+    final baseRaw = (Config.apiBase ?? '').trim();
+    if (baseRaw.isEmpty) {
+      throw Exception('Config.apiBase가 비어 있습니다.');
+    }
+    // scheme 없으면 기본 http 붙임
+    final hasScheme = baseRaw.contains('://');
+    final baseUri = Uri.parse(hasScheme ? baseRaw : 'http://$baseRaw');
 
+    // path 합치기 (base에 슬래시 유무 상관없이 안전하게 합침)
+    final normalized = path.startsWith('/') ? path.substring(1) : path;
+    return baseUri.resolve(normalized);
+  }
 
-  // ---------- 백엔드 호출(기존 로직 유지) ----------
+  // ---------- 백엔드 호출(엔드포인트: /api/gemini/ask, /api/gemini/ask-image) ----------
   Future<String> fetchAiResponse({String? text, File? imageFile}) async {
     final user = FirebaseAuth.instance.currentUser;
     final idToken = await user?.getIdToken();
-    final base = Config.apiBase;
-
 
     if (imageFile != null) {
-      final url = Uri.parse('$base/api/gemini/ask-image');
+      final url = _buildUrl('/api/gemini/ask-image');
       final req = http.MultipartRequest('POST', url);
-      req.headers['Authorization'] = 'Bearer $idToken';
+      if (idToken != null) {
+        req.headers['Authorization'] = 'Bearer $idToken';
+      }
       req.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
       final res = await http.Response.fromStream(await req.send());
       if (res.statusCode == 200) return res.body;
       throw Exception('AI 응답 실패: ${res.statusCode} ${res.body}');
     } else {
-      final url = Uri.parse('$base/api/gemini/ask');
+      final url = _buildUrl('/api/gemini/ask');
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (idToken != null) {
+        headers['Authorization'] = 'Bearer $idToken';
+      }
       final res = await http.post(
         url,
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $idToken'},
+        headers: headers,
         body: jsonEncode({'message': text}),
       );
       if (res.statusCode == 200) return res.body;
@@ -215,12 +240,19 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
     _focus.unfocus();
 
     try {
-      final res = await fetchAiResponse(text: t.isEmpty ? null : t, imageFile: imageFile);
+      final res = await fetchAiResponse(
+          text: t.isEmpty ? null : t, imageFile: imageFile)
+          .timeout(const Duration(seconds: 30)); // 30초 타임아웃
       setState(() {
         _resultText = res;
         _resultIsError = false;
       });
       _saveCache(); // ✅ 최근 답변 캐시
+    } on TimeoutException catch (_) {
+      setState(() {
+        _resultText = '응답 시간이 초과되었습니다. 다시 시도해주세요.';
+        _resultIsError = true;
+      });
     } catch (e) {
       setState(() {
         _resultText = 'AI 응답 오류: $e';
@@ -260,8 +292,6 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
     '다음주 화요일 오후 2시 미팅 잡아줘',
   ];
 
-
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -270,8 +300,11 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
     final keyboard = MediaQuery.of(context).viewInsets.bottom;
     const maxW = 720.0;
 
-    final bg1 = isDark ? cs.surfaceContainerHighest : cs.primaryContainer.withOpacity(0.30);
-    final bg2 = isDark ? cs.surface : (cs.tertiaryContainer ?? cs.secondaryContainer).withOpacity(0.28);
+    final bg1 = isDark
+        ? cs.surfaceContainerHighest
+        : cs.primaryContainer.withOpacity(0.30);
+    final bg2 =
+    isDark ? cs.surface : (cs.tertiaryContainer ?? cs.secondaryContainer).withOpacity(0.28);
 
     final showQuickChips = !_loading && _resultText == null && _lastImage == null;
 
@@ -311,7 +344,6 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-
                     _previousAnswerBanner(cs),
 
                     // 헤더: 날짜 + 인삿말 (글라스 카드)
@@ -358,16 +390,20 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                     // 검색창(유리카드)
                     _Glass(
                       radius: 24,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       child: Row(
                         children: [
                           IconButton(
-                            icon: Icon(Icons.image_outlined, color: cs.onSurfaceVariant),
+                            icon:
+                            Icon(Icons.image_outlined, color: cs.onSurfaceVariant),
                             tooltip: '이미지',
                             onPressed: _pickImage,
                           ),
                           IconButton(
-                            icon: Icon(_listening ? Icons.mic : Icons.mic_none, color: cs.onSurfaceVariant),
+                            icon: Icon(
+                                _listening ? Icons.mic : Icons.mic_none,
+                                color: cs.onSurfaceVariant),
                             tooltip: '음성 입력',
                             onPressed: _toggleMic,
                           ),
@@ -379,7 +415,8 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                               maxLines: 4,
                               decoration: InputDecoration(
                                 hintText: '무엇이든 물어보세요…',
-                                hintStyle: TextStyle(color: cs.onSurfaceVariant),
+                                hintStyle:
+                                TextStyle(color: cs.onSurfaceVariant),
                                 border: InputBorder.none,
                               ),
                               style: TextStyle(color: cs.onSurface),
@@ -388,7 +425,9 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                           ),
                           const SizedBox(width: 6),
                           ScaleTransition(
-                            scale: _loading ? _scale : const AlwaysStoppedAnimation(1.0),
+                            scale: _loading
+                                ? _scale
+                                : const AlwaysStoppedAnimation(1.0),
                             child: InkWell(
                               onTap: _loading ? null : () => _ask(text: _controller.text),
                               borderRadius: BorderRadius.circular(999),
@@ -397,7 +436,8 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                                 height: 46,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
+                                  gradient:
+                                  LinearGradient(colors: [cs.primary, cs.secondary]),
                                   boxShadow: [
                                     BoxShadow(
                                       color: cs.primary.withOpacity(0.35),
@@ -409,9 +449,11 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                                 child: _loading
                                     ? const Padding(
                                   padding: EdgeInsets.all(12),
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white),
                                 )
-                                    : const Icon(Icons.arrow_upward, color: Colors.white),
+                                    : const Icon(Icons.arrow_upward,
+                                    color: Colors.white),
                               ),
                             ),
                           ),
@@ -431,7 +473,8 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                         children: _quickChips.map((t) {
                           return ActionChip(
                             label: Text(t),
-                            avatar: Icon(Icons.auto_awesome, size: 18, color: cs.primary),
+                            avatar: Icon(Icons.auto_awesome,
+                                size: 18, color: cs.primary),
                             onPressed: () {
                               setState(() => _controller.text = t);
                               _focus.requestFocus();
@@ -441,8 +484,6 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                       )
                           : const SizedBox.shrink(key: ValueKey('nochips')),
                     ),
-
-
 
                     // 결과 카드 (응답/오류)
                     AnimatedSwitcher(
@@ -462,15 +503,21 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                               Row(
                                 children: [
                                   Icon(
-                                    _resultIsError ? Icons.error_outline : Icons.auto_awesome,
-                                    color: _resultIsError ? Colors.redAccent : cs.primary,
+                                    _resultIsError
+                                        ? Icons.error_outline
+                                        : Icons.auto_awesome,
+                                    color: _resultIsError
+                                        ? Colors.redAccent
+                                        : cs.primary,
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
                                     _resultIsError ? '오류가 있었어요' : 'AI의 생각',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w800,
-                                      color: _resultIsError ? Colors.redAccent : cs.onSurface,
+                                      color: _resultIsError
+                                          ? Colors.redAccent
+                                          : cs.onSurface,
                                     ),
                                   ),
                                 ],
@@ -481,11 +528,13 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                                   borderRadius: BorderRadius.circular(12),
                                   child: Image.file(_lastImage!, height: 140),
                                 ),
-                              if (_lastImage != null) const SizedBox(height: 10),
+                              if (_lastImage != null)
+                                const SizedBox(height: 10),
                               if (_loading)
                                 const Center(
                                   child: Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 16),
+                                    padding:
+                                    EdgeInsets.symmetric(vertical: 16),
                                     child: CircularProgressIndicator(),
                                   ),
                                 )
@@ -495,7 +544,9 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                                   style: TextStyle(
                                     fontSize: 15,
                                     height: 1.48,
-                                    color: _resultIsError ? Colors.red[300] : cs.onSurface,
+                                    color: _resultIsError
+                                        ? Colors.red[300]
+                                        : cs.onSurface,
                                   ),
                                 ),
                             ],
@@ -505,7 +556,6 @@ class ChatTabState extends State<ChatTab> with SingleTickerProviderStateMixin, A
                     ),
 
                     const SizedBox(height: 36),
-
                   ],
                 ),
               ),
@@ -522,16 +572,19 @@ class _Glass extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final double radius;
-  const _Glass({super.key, required this.child, required this.padding, required this.radius});
+  const _Glass(
+      {super.key,
+        required this.child,
+        required this.padding,
+        required this.radius});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final baseColor = isDark
-        ? cs.surface.withOpacity(0.55)
-        : Colors.white.withOpacity(0.72);
+    final baseColor =
+    isDark ? cs.surface.withOpacity(0.55) : Colors.white.withOpacity(0.72);
 
     final borderColor = isDark
         ? cs.outlineVariant.withOpacity(0.28)
@@ -570,7 +623,8 @@ class _Blob extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: size, height: size,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
