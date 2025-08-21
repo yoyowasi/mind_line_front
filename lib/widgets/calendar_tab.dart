@@ -156,7 +156,7 @@ class _CalendarTabState extends State<CalendarTab> {
                     crossAxisCount: 7,
                     mainAxisSpacing: 5,
                     crossAxisSpacing: 6,
-                    childAspectRatio: 1.1,
+                    childAspectRatio: 0.9,
                   ),
                   itemCount: days.length,
                   itemBuilder: (context, i) {
