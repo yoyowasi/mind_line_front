@@ -1,11 +1,10 @@
 class DiaryEntry {
-  // DiaryEntity의 필드와 일치하도록 수정
   final String id;
   final String uid;
   final String date;
-  final String content; // 'text'에서 'content'로 변경
-  final String mood;    // 'emotion'에서 'mood'로 변경 (enum을 String으로 처리)
-  final String? aiReply; // nullable로 추가
+  final String content;
+  final String mood;
+  final String? aiReply;
   final DateTime createdAt;
 
   DiaryEntry({
@@ -18,26 +17,45 @@ class DiaryEntry {
     required this.createdAt,
   });
 
-  // 서버 응답(JSON)을 DiaryEntry 객체로 변환하는 로직
-  // 백엔드 DiaryEntity의 필드명('content', 'mood' 등)과 정확히 일치해야 합니다.
   factory DiaryEntry.fromJson(Map<String, dynamic> json) {
     return DiaryEntry(
-      // MongoDB의 ObjectId는 id 필드 안에 $oid 값으로 들어오는 경우가 많으므로
-      // 안전하게 처리합니다.
-      id: (json['id'] is Map) ? json['id']['\$oid'] ?? '' : json['id'],
-      uid: json['uid'],
-      date: json['date'],
-      content: json['content'], // 'text' -> 'content'
-      mood: json['mood'],       // 'emotion' -> 'mood'
+      id: _parseId(json['id']),
+      uid: json['uid']?.toString() ?? '',
+      date: json['date']?.toString() ?? '',
+      content: json['content']?.toString() ?? '',
+      mood: json['mood']?.toString() ?? 'NEUTRAL',
       aiReply: json['aiReply'],
-      createdAt: DateTime.parse(json['createdAt']),
+      createdAt: _parseDateTime(json['createdAt']),
     );
   }
 
-  // DiaryEntry를 다시 UI에서 사용할 때 기존 'text'와 'emotion' 속성을
-  // 그대로 사용할 수 있도록 getter를 추가해줍니다. (호환성 유지)
+  static String _parseId(dynamic id) {
+    if (id is Map) {
+      // MongoDB ObjectId의 경우 '$oid' 키를 사용
+      return id['\$oid']?.toString() ?? '';
+    }
+    return id?.toString() ?? '';
+  }
+
+  static DateTime _parseDateTime(dynamic dateTime) {
+    if (dateTime == null) return DateTime.now();
+    
+    try {
+      if (dateTime is String) {
+        return DateTime.parse(dateTime);
+      } else if (dateTime is int) {
+        return DateTime.fromMillisecondsSinceEpoch(dateTime);
+      }
+    } catch (e) {
+      // 파싱 실패 시 현재 시간 반환
+      print('DateTime 파싱 실패: $e');
+    }
+    
+    return DateTime.now();
+  }
+
+  // UI 호환성을 위한 getter
   String get text => content;
   String get emotion => mood;
-  // confidence는 이제 서버에 없으므로 기본값을 반환하거나 UI에서 사용하지 않도록 처리합니다.
-  double get confidence => 1.0;
+  double get confidence => 1.0; // confidence 필드는 더 이상 사용하지 않음
 }
