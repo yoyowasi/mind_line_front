@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Haru Emotion</string>
+
+    <!-- (선택) 알림 채널 이름/설명 - 필요 시 사용 -->
+    <string name="high_importance_channel_name">High Importance Notifications</string>
+    <string name="high_importance_channel_desc">Urgent notifications</string>
+</resources>
