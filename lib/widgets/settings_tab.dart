@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../features/settings/account_settings_page.dart';
 import '../settings/tab_customize_page.dart';
 import '../../core/tabs_reload_scope.dart';
 import '../../core/services/theme_service.dart';
@@ -86,7 +87,17 @@ class SettingsTab extends StatelessWidget {
             ),
 
             // (예시) 다른 설정들
-            const ListTile(leading: Icon(Icons.person), title: Text('계정 관리')),
+            ListTile(
+              leading: const Icon(Icons.person),
+              title: const Text('계정 관리'),
+              subtitle: const Text('닉네임/비밀번호 변경'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AccountSettingsPage()),
+                );
+              },
+            ),
             const ListTile(
                 leading: Icon(Icons.notifications),
                 title: Text('알림 설정')),
