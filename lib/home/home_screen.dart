@@ -6,7 +6,6 @@ import '../../core/services/auth_service.dart';
 import '../widgets/app_drawer.dart';
 
 // 동적 탭 구성
-import '../core/models/tab_config.dart';
 import '../core/services/tab_prefs_service.dart';
 import '../core/tabs_registry.dart';
 import '../widgets/scrollable_bottom_nav.dart';

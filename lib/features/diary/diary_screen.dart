@@ -61,8 +61,7 @@ class DiaryScreen extends StatelessWidget {
                 child: ListTile(
                   title: Text('감정: ${controller.entries.first.emotion}'),
                   subtitle: Text(
-                    '신뢰도: ${(controller.entries.first.confidence * 100).toStringAsFixed(1)}%\n'
-                        '내용: ${controller.entries.first.text}',
+                    '내용: ${controller.entries.first.text}',
                   ),
                 ),
               ),
