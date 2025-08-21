@@ -181,6 +181,121 @@ class ChatTabState extends State<ChatTab>
     );
   }
 
+  // --- 일기 요약 엔드포인트 바로 호출 ---
+
+  Future<void> _summarizeDiaryToday() async {
+    await _summarizeDiaryByDate(DateTime.now());
+  }
+
+  Future<void> _summarizeDiaryByDate(DateTime date) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+    final dateStr = date.toIso8601String().split('T').first; // YYYY-MM-DD
+
+    setState(() {
+      _loading = true;
+      _resultText = null;
+      _resultIsError = false;
+      _lastImage = null;
+    });
+
+    try {
+      final url = _buildUrl('/api/ai/diary/summary?date=$dateStr');
+      final res = await http.get(
+        url,
+        headers: {
+          if (idToken != null) 'Authorization': 'Bearer $idToken',
+        },
+      );
+
+      if (res.statusCode == 200) {
+        // {"answer": "..."} 형태를 기대
+        String text;
+        try {
+          final m = jsonDecode(res.body) as Map<String, dynamic>;
+          text = (m['answer'] as String?) ?? res.body;
+        } catch (_) {
+          text = res.body;
+        }
+        setState(() {
+          _resultText = text;
+          _resultIsError = false;
+        });
+        _saveCache();
+      } else {
+        throw Exception('요약 실패: ${res.statusCode} ${res.body}');
+      }
+    } catch (e) {
+      setState(() {
+        _resultText = '일기 요약 오류: $e';
+        _resultIsError = true;
+      });
+      _saveCache();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// 입력창의 텍스트를 원문으로 POST 요약 (/api/ai/diary/summary)
+  Future<void> _summarizeDiaryFromInput() async {
+    final raw = _controller.text.trim();
+    if (raw.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('요약할 텍스트를 입력해 주세요.')),
+      );
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+
+    setState(() {
+      _loading = true;
+      _resultText = null;
+      _resultIsError = false;
+      _lastImage = null;
+    });
+    _focus.unfocus();
+
+    try {
+      final url = _buildUrl('/api/ai/diary/summary');
+      final res = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (idToken != null) 'Authorization': 'Bearer $idToken',
+        },
+        body: jsonEncode({'content': raw}),
+      );
+
+      if (res.statusCode == 200) {
+        String text;
+        try {
+          final m = jsonDecode(res.body) as Map<String, dynamic>;
+          text = (m['answer'] as String?) ?? res.body;
+        } catch (_) {
+          text = res.body;
+        }
+        setState(() {
+          _resultText = text;
+          _resultIsError = false;
+        });
+        _saveCache();
+      } else {
+        throw Exception('요약 실패: ${res.statusCode} ${res.body}');
+      }
+    } catch (e) {
+      setState(() {
+        _resultText = '일기 요약 오류: $e';
+        _resultIsError = true;
+      });
+      _saveCache();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+
   // -------------------- 백엔드 URL 보정 --------------------
   Uri _buildUrl(String path) {
     final baseRaw = (Config.apiBase ?? '').trim();
@@ -393,30 +508,46 @@ class ChatTabState extends State<ChatTab>
                     ),
                     const SizedBox(height: 12),
 
-                    // ✅ 임시 분류 바 (채팅 입력창 위)
+                    // ✅ 일기 요약 퀵액션 바 (채팅 입력창 위에 배치 추천)
                     _Glass(
                       radius: 18,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
-                          Text('분류(임시)', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                          const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _catChip(cs, _Cat.none),
-                              _catChip(cs, _Cat.diary),
-                              _catChip(cs, _Cat.expense),
-                              _catChip(cs, _Cat.schedule),
-                              _catChip(cs, _Cat.memo),
-                            ],
+                          FilledButton.icon(
+                            onPressed: _loading ? null : _summarizeDiaryToday,
+                            icon: const Icon(Icons.today),
+                            label: const Text('오늘 일기 요약'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _loading
+                                ? null
+                                : () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: DateTime.now(),
+                                firstDate: DateTime(2023),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (picked != null) {
+                                await _summarizeDiaryByDate(picked);
+                              }
+                            },
+                            icon: const Icon(Icons.event),
+                            label: const Text('다른 날짜 요약'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _loading ? null : _summarizeDiaryFromInput,
+                            icon: const Icon(Icons.note_alt_outlined),
+                            label: const Text('텍스트로 요약'),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 12),
+
 
                     // 검색창(유리카드)
                     _Glass(
