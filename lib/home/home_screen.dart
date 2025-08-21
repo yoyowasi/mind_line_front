@@ -237,6 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
             enabledIds: _enabled,
             onSelectTabId: _selectById,
             onTabsReload: _reloadTabs,
+            onLogout: _logout, // ✅ 추가
           ),
           body: Center(
             child: Column(
@@ -260,12 +261,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           // 하단바 없음
-          // floatingActionButton은 그대로 유지해도 되고 필요 없으면 제거해도 됨
-          floatingActionButton: IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: '로그아웃',
-          ),
         ),
       );
     }
@@ -282,6 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
           enabledIds: _enabled,
           onSelectTabId: _selectById,
           onTabsReload: _reloadTabs,
+          onLogout: _logout, // ✅ 추가
         ),
         body: SafeArea(
           child: PageView(
@@ -303,13 +299,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
             ],
           ),
-        ),
-        // 🔥 빠졌던 부분 다시 추가
-        bottomNavigationBar: _buildBottomBar(),
-        floatingActionButton: IconButton(
-          icon: const Icon(Icons.logout),
-          onPressed: _logout,
-          tooltip: '로그아웃',
         ),
       ),
     );
