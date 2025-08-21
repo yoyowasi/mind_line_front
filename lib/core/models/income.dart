@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 class Income {
   final String id;
   final DateTime date;
@@ -21,42 +23,50 @@ class Income {
   });
 
   factory Income.fromJson(Map<String, dynamic> j) {
-    DateTime _readDate(dynamic v) {
-      if (v is String) return DateTime.parse(v);
-      if (v is List && v.length >= 3) return DateTime(v[0], v[1], v[2]);
-      if (v is Map) {
-        final s = v['date'] ?? v[r'$date'] ?? v['iso'];
-        if (s is String) return DateTime.parse(s);
+    DateTime parseDate() {
+      final d = j['date'];
+      final t = j['time'];
+      if (d is String && t is String) {
+        // date + time 조합
+        return DateTime.parse('${d}T${t.padLeft(5, '0')}:00');
       }
-      throw FormatException('Bad date: $v');
+      if (d is String) {
+        // ISO 전체가 올 수도 있음
+        return DateTime.parse(d);
+      }
+      throw const FormatException('date/time not parsable');
     }
 
-    String _readId(Map<String, dynamic> j) {
-      final v = j['id'] ?? j['_id'];
-      if (v is String) return v;
-      if (v is Map && v[r'$oid'] is String) return v[r'$oid'];
-      return '';
-    }
+    final catStr = (j['category'] ?? 'OTHER').toString().toUpperCase();
+    final cat = IncomeCategory.values.firstWhere(
+          (e) => e.name.toUpperCase() == catStr,
+      orElse: () => IncomeCategory.OTHER,
+    );
 
     return Income(
-      id: j['id'] ?? j['_id'],
-      date: DateTime.parse(j['date']),
+      id: (j['id'] ?? j['_id'] ?? '').toString(),
+      date: parseDate(),
       amount: (j['amount'] as num).toDouble(),
-      currency: j['currency'],
-      category: IncomeCategory.values.firstWhere((e) => e.name == j['category']),
-      memo: j['memo'],
+      currency: (j['currency'] ?? 'KRW').toString(),
+      category: cat,
+      memo: (j['memo'] as String?),
       createdAt: j['createdAt'] != null ? DateTime.parse(j['createdAt']) : null,
       updatedAt: j['updatedAt'] != null ? DateTime.parse(j['updatedAt']) : null,
     );
   }
 
-  Map<String, dynamic> toJsonCreate() => {
-    'date': date.toIso8601String().substring(0, 10),
-    'amount': amount,
-    'currency': currency,
-    'category': category.name,
-    if (memo != null) 'memo': memo,
-  };
+  Map<String, dynamic> toJsonCreate() {
+    final df = DateFormat('yyyy-MM-dd');
+    final tf = DateFormat('HH:mm');
+    return {
+      'date': df.format(date),
+      'time': tf.format(date),
+      'amount': amount,
+      'currency': currency,
+      'category': category.name,
+      if (memo != null && memo!.isNotEmpty) 'memo': memo,
+    };
+  }
 }
 
 enum IncomeCategory { SALARY, ALLOWANCE, BONUS, INVEST, REFUND, OTHER }

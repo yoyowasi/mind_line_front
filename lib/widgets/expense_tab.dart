@@ -319,16 +319,10 @@ class _ExpenseTabState extends State<ExpenseTab> {
 
           // 같은 날짜 내에서 등록시간(createdAt) 기준 최신순 정렬
           grouped.forEach((_, bucket) {
-            bucket.expenses.sort((a, b) {
-              final A = a.createdAt ?? a.date;
-              final B = b.createdAt ?? b.date;
-              return B.compareTo(A);
-            });
-            bucket.incomes.sort((a, b) {
-              final A = a.createdAt ?? a.date;
-              final B = b.createdAt ?? b.date;
-              return B.compareTo(A);
-            });
+            bucket.expenses.sort((a, b) => b.date.compareTo(a.date));
+
+            bucket.incomes .sort((a, b) => b.date.compareTo(a.date));
+
           });
 
 
@@ -391,7 +385,7 @@ class _ExpenseTabState extends State<ExpenseTab> {
                     final rows = <Widget>[];
                     if (_view != _ViewType.income) {
                       rows.addAll(bucket.expenses.map((x) {
-                        final timeText = x.createdAt != null ? _t.format(x.createdAt!) : null;
+                        final timeText = _t.format(x.date.toLocal()); // ★ createdAt 말고 date
                         return _EntryTile(
                           key: ValueKey('exp_${x.id}'),
                           title: x.memo ?? _expenseLabel(x.category),
@@ -402,7 +396,7 @@ class _ExpenseTabState extends State<ExpenseTab> {
                           icon: _expenseIcon(x.category),
                           onDelete: () async {
                             await ExpenseApi.deleteById(x.id);
-                            await _reload();
+                            await _reload(); // ★ 삭제 후 즉시 새로고침
                           },
                           onTap: () => _openEditExpense(x),
                         );
@@ -410,7 +404,7 @@ class _ExpenseTabState extends State<ExpenseTab> {
                     }
                     if (_view != _ViewType.expense) {
                       rows.addAll(bucket.incomes.map((x) {
-                        final timeText = _t.format(x.date); // ← 무조건 date 사용
+                        final timeText = _t.format(x.date.toLocal()); // ★ 00:00 방지
                         return _EntryTile(
                           key: ValueKey('inc_${x.id}'),
                           title: x.memo ?? _incomeLabel(x.category),

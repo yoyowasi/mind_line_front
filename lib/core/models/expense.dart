@@ -58,7 +58,6 @@ String categoryToString(ExpenseCategory c) => c.name;
 
 class Expense {
   final String id;
-  /// 날짜(백엔드는 LocalDate만 주므로 시각은 00:00일 수 있음)
   final DateTime date;
   final double amount;
   final String currency;
@@ -81,48 +80,48 @@ class Expense {
   });
 
   factory Expense.fromJson(Map<String, dynamic> j) {
-    // 1) date는 LocalDate라 여러 포맷 가능 → 안전 파서
-    DateTime? dateOnly;
-    if (j.containsKey('date')) {
-      dateOnly = _readDate(j['date']);
+    DateTime parseDate() {
+      final d = j['date'];
+      final t = j['time'];
+      if (d is String && t is String) {
+        // date + time 조합
+        return DateTime.parse('${d}T${t.padLeft(5, '0')}:00');
+      }
+      if (d is String) {
+        // ISO 전체가 올 수도 있음
+        return DateTime.parse(d);
+      }
+      throw const FormatException('date/time not parsable');
     }
 
-    // 2) time(옵션)이 있으면 합치기. 없으면 dateOnly 그대로(00:00)
-    final timeStr = _asString(j['time']);
-    DateTime dt;
-    if (dateOnly != null && timeStr.isNotEmpty) {
-      // "HH:mm"
-      final hm = timeStr.split(':');
-      final h = int.tryParse(hm[0]) ?? 0;
-      final m = (hm.length > 1) ? int.tryParse(hm[1]) ?? 0 : 0;
-      dt = DateTime(dateOnly.year, dateOnly.month, dateOnly.day, h, m);
-    } else if (dateOnly != null) {
-      dt = DateTime(dateOnly.year, dateOnly.month, dateOnly.day);
-    } else {
-      // 서버가 date를 안 줄 경우(이례적) createdAt/updatedAt으로 보정
-      dt = _readDateTimeIso(j['createdAt']) ??
-          _readDateTimeIso(j['updatedAt']) ??
-          DateTime.now();
-    }
+    final catStr = (j['category'] ?? 'OTHER').toString().toUpperCase();
+    final cat = ExpenseCategory.values.firstWhere(
+          (e) => e.name.toUpperCase() == catStr,
+      orElse: () => ExpenseCategory.OTHER,
+    );
 
     return Expense(
-      id: _readId(j),
-      date: dt,
+      id: (j['id'] ?? j['_id'] ?? '').toString(),
+      date: parseDate(),
       amount: (j['amount'] as num).toDouble(),
-      currency: _asString(j['currency']),
-      category: categoryFromString(_asString(j['category'])),
-      memo: j['memo'] as String?,
-      createdAt: _readDateTimeIso(j['createdAt']),
-      updatedAt: _readDateTimeIso(j['updatedAt']),
+      currency: (j['currency'] ?? 'KRW').toString(),
+      category: cat,
+      memo: (j['memo'] as String?),
+      createdAt: j['createdAt'] != null ? DateTime.parse(j['createdAt']) : null,
+      updatedAt: j['updatedAt'] != null ? DateTime.parse(j['updatedAt']) : null,
     );
   }
 
-  /// 생성 요청 바디 (백엔드는 LocalDate만 받음!)
-  Map<String, dynamic> toJsonCreate() => {
-    'date': DateFormat('yyyy-MM-dd').format(date),
-    'amount': amount,
-    'currency': currency,
-    'category': category.name,
-    if (memo != null && memo!.isNotEmpty) 'memo': memo,
-  };
+  Map<String, dynamic> toJsonCreate() {
+    final df = DateFormat('yyyy-MM-dd');
+    final tf = DateFormat('HH:mm');
+    return {
+      'date': df.format(date),
+      'time': tf.format(date),
+      'amount': amount,
+      'currency': currency,
+      'category': category.name,
+      if (memo != null && memo!.isNotEmpty) 'memo': memo,
+    };
+  }
 }

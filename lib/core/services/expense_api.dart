@@ -61,7 +61,6 @@ class ExpenseApi {
     }
   }
 
-  /// 수정 (가능하면 time도 같이 보냄 - 서버는 없어도 무시됨)
   static Future<Expense> update(
       String id, {
         DateTime? date,
@@ -71,10 +70,13 @@ class ExpenseApi {
         String? memo,
       }) async {
     final token = await _token();
+    final df = DateFormat('yyyy-MM-dd');
+    final tf = DateFormat('HH:mm');
+
     final body = <String, dynamic>{};
     if (date != null) {
-      body['date'] = _df.format(date);
-      body['time'] = _tf.format(date); // 서버가 사용하지 않아도 무해 (무시)
+      body['date'] = df.format(date);
+      body['time'] = tf.format(date); // ★ 추가: 시간도 전송
     }
     if (amount != null) body['amount'] = amount;
     if (currency != null) body['currency'] = currency;

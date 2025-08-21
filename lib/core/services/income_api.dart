@@ -55,16 +55,24 @@ class IncomeApi {
       }) async {
     final token = await _token();
     final df = DateFormat('yyyy-MM-dd');
+    final tf = DateFormat('HH:mm');
+
     final body = <String, dynamic>{};
-    if (date != null) body['date'] = df.format(date);
+    if (date != null) {
+      body['date'] = df.format(date);
+      body['time'] = tf.format(date); // ★ 추가: 시간도 전송
+    }
     if (amount != null) body['amount'] = amount;
     if (currency != null) body['currency'] = currency;
     if (category != null) body['category'] = category.name;
     if (memo != null) body['memo'] = memo;
 
     final res = await http.put(
-      _u('/api/incomes/$id'), // ← 수입 엔드포인트
-      headers: {'Authorization': 'Bearer $token','Content-Type': 'application/json'},
+      _u('/api/expenses/$id'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
       body: jsonEncode(body),
     );
     if (res.statusCode != 200) {
