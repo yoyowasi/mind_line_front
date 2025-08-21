@@ -1,6 +1,7 @@
 // lib/tabs/analytics_tab.dart
 import 'dart:convert';
 import 'dart:math';
+import 'package:provider/provider.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -89,6 +90,7 @@ class _ExpenseLite {
     required this.category,
     required this.createdAt,
   });
+
 
   static _ExpenseLite? fromMap(Map<String, dynamic> m) {
     try {
@@ -444,204 +446,228 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
 
   /* ========================== UI ========================== */
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+@override
+Widget build(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
 
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+  if (_loading) {
+    return const Center(child: CircularProgressIndicator());
+  }
 
-    final hasAny = _todoTotal > 0 || _diaries.isNotEmpty || _expenses.isNotEmpty;
+  final hasAny = _todoTotal > 0 || _diaries.isNotEmpty || _expenses.isNotEmpty;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 헤더
-          Row(
+  // (선택) DiaryController를 사용한다면 위젯 트리 상단에 Provider가 있어야 합니다.
+  // 없으면 이 줄과 EmotionChart 섹션을 제거하세요.
+  // ignore: unnecessary_cast
+  final DiaryController? controller =
+      (context as Element).findAncestorWidgetOfExactType<Provider<DiaryController>>() != null
+          ? context.watch<DiaryController>()
+          : null;
+
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 헤더
+        Row(
+          children: [
+            Text(
+              '분석',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontSize: 24, fontWeight: FontWeight.w900, color: cs.primary),
+            ),
+            const Spacer(),
+            _RangePicker(value: _range, onChanged: (r) => setState(() => _range = r)),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 아이덴티티 + 습관 점수
+        _GlassCard(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                '분석',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontSize: 24, fontWeight: FontWeight.w900, color: cs.primary),
+              Icon(Icons.fingerprint, color: cs.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  hasAny
+                      ? '당신의 패턴: $_identitySummary'
+                      : '아직 데이터가 없어요. 일정/일기를 기록하면 패턴을 찾아드릴게요.',
+                  style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface),
+                ),
               ),
-              const Spacer(),
-              _RangePicker(value: _range, onChanged: (r) => setState(() => _range = r)),
+              const SizedBox(width: 8),
+              _CircleScore(score: _habitScore),
             ],
           ),
-          const SizedBox(height: 12),
+        ),
+        const SizedBox(height: 12),
 
-          // 아이덴티티 + 습관 점수
-          _GlassCard(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(Icons.fingerprint, color: cs.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    hasAny
-                        ? '당신의 패턴: $_identitySummary'
-                        : '아직 데이터가 없어요. 일정/일기를 기록하면 패턴을 찾아드릴게요.',
-                    style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _CircleScore(score: _habitScore),
-              ],
-            ),
+        // KPI
+        SizedBox(
+          height: 100,
+          child: Row(
+            children: [
+              Expanded(child: _KpiTile(title: '완료율', value: '${_todoCompletionRate.toStringAsFixed(0)}%')),
+              const SizedBox(width: 8),
+              Expanded(child: _KpiTile(title: '미완료', value: '$_todoPending')),
+              const SizedBox(width: 8),
+              Expanded(child: _KpiTile(title: '연체', value: '$_todoOverdue')),
+            ],
           ),
-          const SizedBox(height: 12),
+        ),
+        const SizedBox(height: 12),
 
-          // KPI
-          SizedBox(
-            height: 100,
-            child: Row(
-              children: [
-                Expanded(child: _KpiTile(title: '완료율', value: '${_todoCompletionRate.toStringAsFixed(0)}%')),
-                const SizedBox(width: 8),
-                Expanded(child: _KpiTile(title: '미완료', value: '$_todoPending')),
-                const SizedBox(width: 8),
-                Expanded(child: _KpiTile(title: '연체', value: '$_todoOverdue')),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // 본문 스크롤
-          Expanded(
-            child: ListView(
-              children: [
-                if (_todoTotal > 0) ...[
-                  _SectionTitle('일정 패턴'),
-                  _GlassCard(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(height: 170, child: _buildTodoPie(cs)),
-                  ),
-                  const SizedBox(height: 12),
-                  _GlassCard(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(height: 180, child: _buildWeekdayBar(cs)),
-                  ),
-                  const SizedBox(height: 12),
-                  _GlassCard(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(height: 180, child: _buildHourBar(cs)),
-                  ),
-                  const SizedBox(height: 12),
-                  _GlassCard(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(height: 220, child: _buildTodoLine(cs)),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                if (_diaries.isNotEmpty) ...[
-                  _SectionTitle('감정 일기 분석'),
-                  _GlassCard(
-                    child: Row(
-                      children: [
-                        Icon(Icons.emoji_emotions, color: cs.secondary),
-                        const SizedBox(width: 8),
-                        Text('평균 감정: ${_avgMood.toStringAsFixed(2)}  (-1~1)', style: TextStyle(color: cs.onSurface)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _GlassCard(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(height: 170, child: _buildMoodPie(cs)),
-                  ),
-                  const SizedBox(height: 12),
-                  _GlassCard(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(height: 220, child: _buildMoodLine(cs)),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                if (_expenses.isNotEmpty) ...[
-                  _SectionTitle('지출 성향'),
-                  _GlassCard(
-                    child: Row(
-                      children: [
-                        Icon(Icons.payments, color: cs.primary),
-                        const SizedBox(width: 8),
-                        Text('총 지출: ${_formatCur(_expenseTotal)}', style: TextStyle(color: cs.onSurface)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _GlassCard(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(height: 170, child: _buildExpensePie(cs)),
-                  ),
-                  const SizedBox(height: 12),
-                  _GlassCard(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(height: 220, child: _buildExpenseTrend(cs)),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                _SectionTitle('개인화 인사이트'),
+        // 본문 스크롤
+        Expanded(
+          child: ListView(
+            children: [
+              // (선택) 감정 분석 섹션: Provider가 있을 때만 표시
+              if (controller != null) ...[
+                const _SectionTitle('감정 분석'),
                 _GlassCard(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final tip in _insights) ...[
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(Icons.lightbulb_outline, color: cs.primary, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(tip)),
-                          ],
+                  padding: const EdgeInsets.all(16),
+                  child: controller.entries.isEmpty
+                      ? const Center(child: Text('분석할 일기 데이터가 없습니다.'))
+                      : SizedBox(
+                          height: 220,
+                          child: EmotionChart(entries: controller.entries),
                         ),
-                        const SizedBox(height: 8),
-                      ],
-                    ],
-                  ),
                 ),
                 const SizedBox(height: 16),
+              ],
 
-                _SectionTitle('내보내기 (CSV 복사)'),
+              if (_todoTotal > 0) ...[
+                _SectionTitle('일정 패턴'),
                 _GlassCard(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(height: 170, child: _buildTodoPie(cs)),
+                ),
+                const SizedBox(height: 12),
+                _GlassCard(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(height: 180, child: _buildWeekdayBar(cs)),
+                ),
+                const SizedBox(height: 12),
+                _GlassCard(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(height: 180, child: _buildHourBar(cs)),
+                ),
+                const SizedBox(height: 12),
+                _GlassCard(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(height: 220, child: _buildTodoLine(cs)),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              if (_diaries.isNotEmpty) ...[
+                const _SectionTitle('감정 일기 분석'),
+                _GlassCard(
+                  child: Row(
                     children: [
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.content_copy),
-                        label: const Text('일정 CSV'),
-                        onPressed: () => _copyCsv(_csvTodos()),
-                      ),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.content_copy),
-                        label: const Text('일기 CSV'),
-                        onPressed: () => _copyCsv(_csvDiary()),
-                      ),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.content_copy),
-                        label: const Text('지출 CSV'),
-                        onPressed: () => _copyCsv(_csvExpense()),
-                      ),
+                      Icon(Icons.emoji_emotions, color: cs.secondary),
+                      const SizedBox(width: 8),
+                      Text('평균 감정: ${_avgMood.toStringAsFixed(2)}  (-1~1)', style: TextStyle(color: cs.onSurface)),
                     ],
                   ),
                 ),
+                const SizedBox(height: 8),
+                _GlassCard(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(height: 170, child: _buildMoodPie(cs)),
+                ),
                 const SizedBox(height: 12),
+                _GlassCard(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(height: 220, child: _buildMoodLine(cs)),
+                ),
+                const SizedBox(height: 16),
               ],
-            ),
+
+              if (_expenses.isNotEmpty) ...[
+                const _SectionTitle('지출 성향'),
+                _GlassCard(
+                  child: Row(
+                    children: [
+                      Icon(Icons.payments, color: cs.primary),
+                      const SizedBox(width: 8),
+                      Text('총 지출: ${_formatCur(_expenseTotal)}', style: TextStyle(color: cs.onSurface)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _GlassCard(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(height: 170, child: _buildExpensePie(cs)),
+                ),
+                const SizedBox(height: 12),
+                _GlassCard(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(height: 220, child: _buildExpenseTrend(cs)),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              const _SectionTitle('개인화 인사이트'),
+              _GlassCard(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final tip in _insights) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.lightbulb_outline, color: cs.primary, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(tip)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              const _SectionTitle('내보내기 (CSV 복사)'),
+              _GlassCard(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.content_copy),
+                      label: const Text('일정 CSV'),
+                      onPressed: () => _copyCsv(_csvTodos()),
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.content_copy),
+                      label: const Text('일기 CSV'),
+                      onPressed: () => _copyCsv(_csvDiary()),
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.content_copy),
+                      label: const Text('지출 CSV'),
+                      onPressed: () => _copyCsv(_csvExpense()),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
+
 
   /* ========================== 차트 빌더 ========================== */
 

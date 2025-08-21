@@ -423,9 +423,9 @@ class ChatTabState extends State<ChatTab>
 
     final bg1 = isDark
         ? cs.surfaceContainerHighest
-        : cs.primaryContainer.withOpacity(0.30);
+        : cs.primaryContainer.withAlpha(77);
     final bg2 =
-    isDark ? cs.surface : (cs.tertiaryContainer ?? cs.secondaryContainer).withOpacity(0.28);
+    isDark ? cs.surface : cs.tertiaryContainer.withAlpha(71);
 
     final showQuickChips = !_loading && _resultText == null && _lastImage == null;
 
@@ -448,12 +448,12 @@ class ChatTabState extends State<ChatTab>
           Positioned(
             top: -80,
             right: -60,
-            child: _Blob(color: cs.primary.withOpacity(0.20), size: 220),
+            child: _Blob(color: cs.primary.withAlpha(51), size: 220),
           ),
           Positioned(
             bottom: -60,
             left: -50,
-            child: _Blob(color: cs.secondary.withOpacity(0.18), size: 180),
+            child: _Blob(color: cs.secondary.withAlpha(46), size: 180),
           ),
 
           // 2) 콘텐츠
@@ -475,7 +475,7 @@ class ChatTabState extends State<ChatTab>
                         children: [
                           CircleAvatar(
                             radius: 22,
-                            backgroundColor: cs.primary.withOpacity(0.12),
+                            backgroundColor: cs.primary.withAlpha(31),
                             child: Icon(Icons.auto_awesome, color: cs.primary),
                           ),
                           const SizedBox(width: 12),
@@ -596,7 +596,7 @@ class ChatTabState extends State<ChatTab>
                                   gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: cs.primary.withOpacity(0.35),
+                                      color: cs.primary.withAlpha(89),
                                       blurRadius: 12,
                                       offset: const Offset(0, 6),
                                     ),
@@ -801,11 +801,11 @@ class _Glass extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final baseColor =
-    isDark ? cs.surface.withOpacity(0.55) : Colors.white.withOpacity(0.72);
+    isDark ? cs.surface.withAlpha(140) : Colors.white.withAlpha(184);
 
     final borderColor = isDark
-        ? cs.outlineVariant.withOpacity(0.28)
-        : Colors.white.withOpacity(0.65);
+        ? cs.outlineVariant.withAlpha(71)
+        : Colors.white.withAlpha(166);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
@@ -819,7 +819,7 @@ class _Glass extends StatelessWidget {
             border: Border.all(color: borderColor, width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.30 : 0.06),
+                color: Colors.black.withAlpha(isDark ? 77 : 15),
                 blurRadius: 14,
                 offset: const Offset(0, 8),
               ),
@@ -845,7 +845,7 @@ class _Blob extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: color.withOpacity(0.45), blurRadius: 30)],
+        boxShadow: [BoxShadow(color: color.withAlpha(115), blurRadius: 30)],
       ),
     );
   }

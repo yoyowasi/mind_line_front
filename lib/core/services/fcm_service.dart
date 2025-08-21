@@ -7,7 +7,7 @@ import 'api_service.dart'; // API 서비스 임포트
 // 백그라운드 메시지 핸들러 (앱이 꺼져있을 때)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print("백그라운드에서 푸시 알림 수신: ${message.messageId}");
+  // TODO: Log message: "백그라운드에서 푸시 알림 수신: ${message.messageId}"
 }
 
 class FcmService {
@@ -31,7 +31,7 @@ class FcmService {
     // FCM 토큰 가져와서 서버로 전송
     final fcmToken = await _firebaseMessaging.getToken();
     if (fcmToken != null) {
-      print("FCM Token: $fcmToken");
+      // TODO: Log message: "FCM Token: $fcmToken"
       await _sendTokenToServer(fcmToken);
     }
 
@@ -50,9 +50,9 @@ class FcmService {
     try {
       // Spring Boot에 만들어 둘 API 엔드포인트
       await ApiService.post('/api/users/save-fcm-token', {'fcmToken': token});
-      print("FCM 토큰을 서버에 성공적으로 저장했습니다.");
+      // TODO: Log message: "FCM 토큰을 서버에 성공적으로 저장했습니다."
     } catch (e) {
-      print("FCM 토큰 서버 저장 실패: $e");
+      // TODO: Log message: "FCM 토큰 서버 저장 실패: $e"
     }
   }
 
@@ -94,7 +94,7 @@ class FcmService {
 
     // 앱이 백그라운드에 있을 때 사용자가 알림을 탭한 경우
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('알림을 탭하여 앱을 열었습니다: ${message.data}');
+      // TODO: Log message: '알림을 탭하여 앱을 열었습니다: ${message.data}'
       // 예: `message.data['screen']` 값에 따라 특정 화면으로 이동
     });
 

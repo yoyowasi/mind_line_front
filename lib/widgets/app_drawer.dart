@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import '../layout/app_scaffold.dart';
 import '../core/tabs_registry.dart';        // kAllTabs
-import '../core/tabs_reload_scope.dart';   // 저장 콜백 전역 주입 (선택)
 
 class AppDrawer extends StatelessWidget {
   final List<String> enabledIds;

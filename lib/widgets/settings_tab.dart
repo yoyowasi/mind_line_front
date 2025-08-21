@@ -16,8 +16,8 @@ class SettingsTab extends StatelessWidget {
     return Scaffold(
       backgroundColor: Theme.of(context)
           .colorScheme
-          .surfaceVariant
-          .withOpacity(0.06),
+          .surfaceContainerHighest
+          .withAlpha(15),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),

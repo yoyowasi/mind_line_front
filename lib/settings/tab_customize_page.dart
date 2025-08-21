@@ -38,6 +38,7 @@ class _TabCustomizePageState extends State<TabCustomizePage> {
 
     await widget.onSaved?.call();
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('탭 구성이 저장되었습니다.')),
     );

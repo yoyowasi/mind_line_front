@@ -22,8 +22,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         emailController.text.trim(),
         passwordController.text.trim(),
       );
+      if (!mounted) return;
       context.go('/home');
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('회원가입 실패: $e')),
       );
