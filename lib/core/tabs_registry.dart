@@ -36,19 +36,19 @@ final Map<String, TabDefinition> kAllTabs = {
   ),
   'schedule': TabDefinition(
     id: 'schedule',
-    label: '내 일정',
+    label: '일정',
     icon: Icons.calendar_month,
     builder: (ctx) => const widgets_expense.ExpenseTab(),
   ),
   'expense': TabDefinition(
     id: 'expense',
-    label: '지출내역',
+    label: '지출',
     icon: Icons.attach_money,
     builder: (ctx) => const widgets_schedule.ScheduleTab(),
   ),
   'diary': TabDefinition(
     id: 'diary',
-    label: '일기 보기',
+    label: '일기',
     icon: Icons.book_outlined,
     builder: (ctx) => const widgets_diary.DaliyTab(),
   ),

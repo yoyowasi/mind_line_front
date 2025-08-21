@@ -9,39 +9,53 @@ class EmotionChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emotionCount = <String, int>{};
-
-    // 🔹 감정별 개수 세기
-    for (var entry in entries) {
-      emotionCount[entry.emotion] = (emotionCount[entry.emotion] ?? 0) + 1;
-    }
-
-    final total = emotionCount.values.fold<int>(0, (a, b) => a + b);
-
-    if (emotionCount.isEmpty) {
-      return const Center(child: Text('분석된 감정 데이터가 없습니다.'));
-    }
-
+    // NOTE: Using hardcoded data for debugging the rendering issue.
     return AspectRatio(
       aspectRatio: 1.2,
       child: PieChart(
         PieChartData(
-          sections: emotionCount.entries.map((e) {
-            final percent = total > 0 ? (e.value / total * 100) : 0;
-            final color = Color(e.key.hashCode | 0xFF000000).withOpacity(1.0);
-
-            return PieChartSectionData(
-              color: color,
-              value: e.value.toDouble(),
-              title: '${e.key} (${percent.toStringAsFixed(1)}%)',
+          pieTouchData: PieTouchData(
+            touchCallback: (FlTouchEvent event, pieTouchResponse) {
+              //-
+            },
+          ),
+          sectionsSpace: 2, // Add some space between sections
+          centerSpaceRadius: 40, // Add a center space
+          sections: [
+            PieChartSectionData(
+              color: Colors.blue,
+              value: 40,
+              title: 'Happy (40%)',
               radius: 80,
               titleStyle: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
-            );
-          }).toList(),
+            ),
+            PieChartSectionData(
+              color: Colors.red,
+              value: 30,
+              title: 'Sad (30%)',
+              radius: 80,
+              titleStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            PieChartSectionData(
+              color: Colors.green,
+              value: 30,
+              title: 'Neutral (30%)',
+              radius: 80,
+              titleStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
         ),
       ),
     );
