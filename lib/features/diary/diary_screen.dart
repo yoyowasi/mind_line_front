@@ -12,7 +12,7 @@ class DiaryScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('감정 일기')),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [

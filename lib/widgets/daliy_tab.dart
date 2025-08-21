@@ -272,15 +272,17 @@ class _DaliyTabState extends State<DaliyTab>
               // 헤더
               Row(
                 children: [
-                  Text('일기', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: cs.primary)),
+                  Text('일기', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.primary)),
                   const Spacer(),
                   IconButton(onPressed: _goPrevDay, icon: const Icon(Icons.chevron_left)),
-                  Text(_dateKorean(_selectedDate),
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: cs.onSurface)),
+                  Flexible(
+                    child: Text(_dateKorean(_selectedDate),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: cs.onSurface)),
+                  ),
                   IconButton(onPressed: _goNextDay, icon: const Icon(Icons.chevron_right)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   FilledButton.tonal(onPressed: _goToday, child: const Text('오늘')),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   IconButton(onPressed: _pickDate, icon: const Icon(Icons.event)),
                 ],
               ),

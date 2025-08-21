@@ -154,9 +154,9 @@ class _CalendarTabState extends State<CalendarTab> {
                   padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 7,
-                    mainAxisSpacing: 6,
+                    mainAxisSpacing: 5,
                     crossAxisSpacing: 6,
-                    childAspectRatio: 1.1,
+                    childAspectRatio: 0.9,
                   ),
                   itemCount: days.length,
                   itemBuilder: (context, i) {
