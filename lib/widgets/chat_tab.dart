@@ -31,6 +31,9 @@ class ChatTabState extends State<ChatTab>
   File? _lastImage; // 최근 보낸 이미지(미리보기)
   Timer? _debounce;
 
+  // --- 임시 분류 상태 ---
+  _Cat _selectedCat = _Cat.none;
+
   // send 버튼 살짝 펄스
   late final AnimationController _pulse;
   late final Animation<double> _scale;
@@ -66,6 +69,7 @@ class ChatTabState extends State<ChatTab>
       _lastImage = null;
       _cachedLastText = null;
       _cachedLastImagePath = null;
+      _selectedCat = _Cat.none; // 분류 초기화
     });
     final ps = PageStorage.of(context);
     ps.writeState(context, null, identifier: 'chat.lastText');
@@ -177,24 +181,134 @@ class ChatTabState extends State<ChatTab>
     );
   }
 
+  // --- 일기 요약 엔드포인트 바로 호출 ---
+
+  Future<void> _summarizeDiaryToday() async {
+    await _summarizeDiaryByDate(DateTime.now());
+  }
+
+  Future<void> _summarizeDiaryByDate(DateTime date) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+    final dateStr = date.toIso8601String().split('T').first; // YYYY-MM-DD
+
+    setState(() {
+      _loading = true;
+      _resultText = null;
+      _resultIsError = false;
+      _lastImage = null;
+    });
+
+    try {
+      final url = _buildUrl('/api/ai/diary/summary?date=$dateStr');
+      final res = await http.get(
+        url,
+        headers: {
+          if (idToken != null) 'Authorization': 'Bearer $idToken',
+        },
+      );
+
+      if (res.statusCode == 200) {
+        // {"answer": "..."} 형태를 기대
+        String text;
+        try {
+          final m = jsonDecode(res.body) as Map<String, dynamic>;
+          text = (m['answer'] as String?) ?? res.body;
+        } catch (_) {
+          text = res.body;
+        }
+        setState(() {
+          _resultText = text;
+          _resultIsError = false;
+        });
+        _saveCache();
+      } else {
+        throw Exception('요약 실패: ${res.statusCode} ${res.body}');
+      }
+    } catch (e) {
+      setState(() {
+        _resultText = '일기 요약 오류: $e';
+        _resultIsError = true;
+      });
+      _saveCache();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// 입력창의 텍스트를 원문으로 POST 요약 (/api/ai/diary/summary)
+  Future<void> _summarizeDiaryFromInput() async {
+    final raw = _controller.text.trim();
+    if (raw.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('요약할 텍스트를 입력해 주세요.')),
+      );
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+
+    setState(() {
+      _loading = true;
+      _resultText = null;
+      _resultIsError = false;
+      _lastImage = null;
+    });
+    _focus.unfocus();
+
+    try {
+      final url = _buildUrl('/api/ai/diary/summary');
+      final res = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (idToken != null) 'Authorization': 'Bearer $idToken',
+        },
+        body: jsonEncode({'content': raw}),
+      );
+
+      if (res.statusCode == 200) {
+        String text;
+        try {
+          final m = jsonDecode(res.body) as Map<String, dynamic>;
+          text = (m['answer'] as String?) ?? res.body;
+        } catch (_) {
+          text = res.body;
+        }
+        setState(() {
+          _resultText = text;
+          _resultIsError = false;
+        });
+        _saveCache();
+      } else {
+        throw Exception('요약 실패: ${res.statusCode} ${res.body}');
+      }
+    } catch (e) {
+      setState(() {
+        _resultText = '일기 요약 오류: $e';
+        _resultIsError = true;
+      });
+      _saveCache();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+
   // -------------------- 백엔드 URL 보정 --------------------
-  // http 패키지는 "절대 URL"만 허용합니다. (scheme 포함: http/https)
-  // Config.apiBase가 'localhost:8080' 같은 형식이면 아래에서 http:// 를 붙여 절대 URL로 만듭니다.
   Uri _buildUrl(String path) {
     final baseRaw = (Config.apiBase ?? '').trim();
     if (baseRaw.isEmpty) {
       throw Exception('Config.apiBase가 비어 있습니다.');
     }
-    // scheme 없으면 기본 http 붙임
     final hasScheme = baseRaw.contains('://');
     final baseUri = Uri.parse(hasScheme ? baseRaw : 'http://$baseRaw');
-
-    // path 합치기 (base에 슬래시 유무 상관없이 안전하게 합침)
     final normalized = path.startsWith('/') ? path.substring(1) : path;
     return baseUri.resolve(normalized);
   }
 
-  // ---------- 백엔드 호출(엔드포인트: /api/gemini/ask, /api/gemini/ask-image) ----------
+  // ---------- 백엔드 호출 ----------
   Future<String> fetchAiResponse({String? text, File? imageFile}) async {
     final user = FirebaseAuth.instance.currentUser;
     final idToken = await user?.getIdToken();
@@ -225,10 +339,17 @@ class ChatTabState extends State<ChatTab>
     }
   }
 
+  // 선택된 분류를 텍스트 앞에 태그로 붙인다. (백엔드가 태그만 파싱해도 라우팅 가능)
+  String _applyCategoryTag(String raw) {
+    if (_selectedCat == _Cat.none) return raw;
+    return '[CATEGORY:${_selectedCat.name}] $raw';
+  }
+
   Future<void> _ask({String? text, File? imageFile}) async {
     final t = text?.trim() ?? '';
     if (t.isEmpty && imageFile == null) return;
 
+    // 전송 직전 입력창 클리어
     _controller.clear();
 
     setState(() {
@@ -240,8 +361,8 @@ class ChatTabState extends State<ChatTab>
     _focus.unfocus();
 
     try {
-      final res = await fetchAiResponse(
-          text: t.isEmpty ? null : t, imageFile: imageFile)
+      final sendText = t.isEmpty ? null : _applyCategoryTag(t);
+      final res = await fetchAiResponse(text: sendText, imageFile: imageFile)
           .timeout(const Duration(seconds: 30)); // 30초 타임아웃
       setState(() {
         _resultText = res;
@@ -312,7 +433,7 @@ class ChatTabState extends State<ChatTab>
       onTap: () => _focus.unfocus(),
       child: Stack(
         children: [
-          // 1) 배경: 감성 그라데이션(다크/라이트 대응)
+          // 1) 배경
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -323,7 +444,7 @@ class ChatTabState extends State<ChatTab>
             ),
           ),
 
-          // 살짝 도형 겹침
+          // 장식
           Positioned(
             top: -80,
             right: -60,
@@ -346,7 +467,7 @@ class ChatTabState extends State<ChatTab>
                   children: [
                     _previousAnswerBanner(cs),
 
-                    // 헤더: 날짜 + 인삿말 (글라스 카드)
+                    // 헤더
                     _Glass(
                       radius: 18,
                       padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
@@ -385,25 +506,62 @@ class ChatTabState extends State<ChatTab>
                         ],
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 12),
+
+                    // ✅ 일기 요약 퀵액션 바 (채팅 입력창 위에 배치 추천)
+                    _Glass(
+                      radius: 18,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: _loading ? null : _summarizeDiaryToday,
+                            icon: const Icon(Icons.today),
+                            label: const Text('오늘 일기 요약'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _loading
+                                ? null
+                                : () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: DateTime.now(),
+                                firstDate: DateTime(2023),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (picked != null) {
+                                await _summarizeDiaryByDate(picked);
+                              }
+                            },
+                            icon: const Icon(Icons.event),
+                            label: const Text('다른 날짜 요약'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _loading ? null : _summarizeDiaryFromInput,
+                            icon: const Icon(Icons.note_alt_outlined),
+                            label: const Text('텍스트로 요약'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
 
                     // 검색창(유리카드)
                     _Glass(
                       radius: 24,
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       child: Row(
                         children: [
                           IconButton(
-                            icon:
-                            Icon(Icons.image_outlined, color: cs.onSurfaceVariant),
+                            icon: Icon(Icons.image_outlined, color: cs.onSurfaceVariant),
                             tooltip: '이미지',
                             onPressed: _pickImage,
                           ),
                           IconButton(
-                            icon: Icon(
-                                _listening ? Icons.mic : Icons.mic_none,
-                                color: cs.onSurfaceVariant),
+                            icon: Icon(_listening ? Icons.mic : Icons.mic_none, color: cs.onSurfaceVariant),
                             tooltip: '음성 입력',
                             onPressed: _toggleMic,
                           ),
@@ -414,9 +572,10 @@ class ChatTabState extends State<ChatTab>
                               minLines: 1,
                               maxLines: 4,
                               decoration: InputDecoration(
-                                hintText: '무엇이든 물어보세요…',
-                                hintStyle:
-                                TextStyle(color: cs.onSurfaceVariant),
+                                hintText: _selectedCat == _Cat.none
+                                    ? '무엇이든 물어보세요…'
+                                    : '[${_selectedCat.label}] 내용 입력…',
+                                hintStyle: TextStyle(color: cs.onSurfaceVariant),
                                 border: InputBorder.none,
                               ),
                               style: TextStyle(color: cs.onSurface),
@@ -425,9 +584,7 @@ class ChatTabState extends State<ChatTab>
                           ),
                           const SizedBox(width: 6),
                           ScaleTransition(
-                            scale: _loading
-                                ? _scale
-                                : const AlwaysStoppedAnimation(1.0),
+                            scale: _loading ? _scale : const AlwaysStoppedAnimation(1.0),
                             child: InkWell(
                               onTap: _loading ? null : () => _ask(text: _controller.text),
                               borderRadius: BorderRadius.circular(999),
@@ -436,8 +593,7 @@ class ChatTabState extends State<ChatTab>
                                 height: 46,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  gradient:
-                                  LinearGradient(colors: [cs.primary, cs.secondary]),
+                                  gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
                                   boxShadow: [
                                     BoxShadow(
                                       color: cs.primary.withAlpha(89),
@@ -449,11 +605,9 @@ class ChatTabState extends State<ChatTab>
                                 child: _loading
                                     ? const Padding(
                                   padding: EdgeInsets.all(12),
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white),
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                 )
-                                    : const Icon(Icons.arrow_upward,
-                                    color: Colors.white),
+                                    : const Icon(Icons.arrow_upward, color: Colors.white),
                               ),
                             ),
                           ),
@@ -473,8 +627,7 @@ class ChatTabState extends State<ChatTab>
                         children: _quickChips.map((t) {
                           return ActionChip(
                             label: Text(t),
-                            avatar: Icon(Icons.auto_awesome,
-                                size: 18, color: cs.primary),
+                            avatar: Icon(Icons.auto_awesome, size: 18, color: cs.primary),
                             onPressed: () {
                               setState(() => _controller.text = t);
                               _focus.requestFocus();
@@ -503,23 +656,34 @@ class ChatTabState extends State<ChatTab>
                               Row(
                                 children: [
                                   Icon(
-                                    _resultIsError
-                                        ? Icons.error_outline
-                                        : Icons.auto_awesome,
-                                    color: _resultIsError
-                                        ? Colors.redAccent
-                                        : cs.primary,
+                                    _resultIsError ? Icons.error_outline : Icons.auto_awesome,
+                                    color: _resultIsError ? Colors.redAccent : cs.primary,
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
                                     _resultIsError ? '오류가 있었어요' : 'AI의 생각',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w800,
-                                      color: _resultIsError
-                                          ? Colors.redAccent
-                                          : cs.onSurface,
+                                      color: _resultIsError ? Colors.redAccent : cs.onSurface,
                                     ),
                                   ),
+                                  const Spacer(),
+                                  if (_selectedCat != _Cat.none)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: cs.primary.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(_selectedCat.icon, size: 14, color: cs.primary),
+                                          const SizedBox(width: 4),
+                                          Text(_selectedCat.label, style: TextStyle(color: cs.primary, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                               ),
                               const SizedBox(height: 10),
@@ -528,13 +692,11 @@ class ChatTabState extends State<ChatTab>
                                   borderRadius: BorderRadius.circular(12),
                                   child: Image.file(_lastImage!, height: 140),
                                 ),
-                              if (_lastImage != null)
-                                const SizedBox(height: 10),
+                              if (_lastImage != null) const SizedBox(height: 10),
                               if (_loading)
                                 const Center(
                                   child: Padding(
-                                    padding:
-                                    EdgeInsets.symmetric(vertical: 16),
+                                    padding: EdgeInsets.symmetric(vertical: 16),
                                     child: CircularProgressIndicator(),
                                   ),
                                 )
@@ -544,9 +706,7 @@ class ChatTabState extends State<ChatTab>
                                   style: TextStyle(
                                     fontSize: 15,
                                     height: 1.48,
-                                    color: _resultIsError
-                                        ? Colors.red[300]
-                                        : cs.onSurface,
+                                    color: _resultIsError ? Colors.red[300] : cs.onSurface,
                                   ),
                                 ),
                             ],
@@ -564,6 +724,63 @@ class ChatTabState extends State<ChatTab>
         ],
       ),
     );
+  }
+
+  // ----- 분류 칩 위젯 -----
+  Widget _catChip(ColorScheme cs, _Cat c) {
+    final selected = _selectedCat == c;
+    final bg = selected ? cs.primary.withOpacity(0.12) : Colors.transparent;
+    final fg = selected ? cs.primary : cs.onSurfaceVariant;
+
+    return ChoiceChip(
+      selected: selected,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+      avatar: Icon(c.icon, size: 16, color: fg),
+      label: Text(c.label, style: TextStyle(color: fg)),
+      selectedColor: bg,
+      backgroundColor: Colors.transparent,
+      side: BorderSide(color: selected ? cs.primary : cs.outlineVariant),
+      onSelected: (_) {
+        setState(() {
+          _selectedCat = (selected ? _Cat.none : c);
+        });
+      },
+    );
+  }
+}
+
+/// 임시 분류용 enum
+enum _Cat { none, diary, expense, schedule, memo }
+
+extension on _Cat {
+  String get label {
+    switch (this) {
+      case _Cat.none:
+        return '분류 안함';
+      case _Cat.diary:
+        return '일기';
+      case _Cat.expense:
+        return '지출';
+      case _Cat.schedule:
+        return '일정';
+      case _Cat.memo:
+        return '메모';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case _Cat.none:
+        return Icons.block_outlined;
+      case _Cat.diary:
+        return Icons.book_outlined;
+      case _Cat.expense:
+        return Icons.attach_money;
+      case _Cat.schedule:
+        return Icons.calendar_month;
+      case _Cat.memo:
+        return Icons.sticky_note_2_outlined;
+    }
   }
 }
 
