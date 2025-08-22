@@ -113,29 +113,36 @@ class _ScheduleTabState extends State<ScheduleTab> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        leadingWidth: 64,
+        leadingWidth: 110, // ← 64 → 110 정도로 넓혀줌
         leading: Padding(
           padding: const EdgeInsets.only(left: 12),
-          child: Center(
+          child: Align(
+            alignment: Alignment.centerLeft,
             child: Text(
-              '일정',
+              '일정',                 // ← 공백 제거해서 더 컴팩트
+              maxLines: 1,                // ← 한 줄 고정
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: cs.onSurface,
+                color: cs.onSurface,      // ← 오탈자 onSurfa → onSurface
                 fontWeight: FontWeight.w800,
                 fontSize: 18,
               ),
             ),
+
           ),
         ),
         titleSpacing: 4,
         title: GestureDetector(
           onTap: _pickMonth,
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                _monthFmt.format(_from),
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              Flexible( // ← 추가: 남은 공간 안에서 줄여서 그리기
+                child: Text(
+                  _monthFmt.format(_from),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
               const SizedBox(width: 6),
               const Icon(Icons.expand_more, size: 20),
