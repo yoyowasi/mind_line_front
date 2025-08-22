@@ -200,28 +200,17 @@ class ChatTabState extends State<ChatTab>
     });
 
     try {
-      final url = _buildUrl('/api/ai/diary/summary?date=$dateStr');
+      final url = _buildUrl('/api/ai/diary/latest-summary');
       final res = await http.get(
         url,
-        headers: {
-          if (idToken != null) 'Authorization': 'Bearer $idToken',
-        },
+        headers: {'Authorization': 'Bearer $idToken'},
       );
-
       if (res.statusCode == 200) {
-        // {"answer": "..."} 형태를 기대
-        String text;
-        try {
-          final m = jsonDecode(res.body) as Map<String, dynamic>;
-          text = (m['answer'] as String?) ?? res.body;
-        } catch (_) {
-          text = res.body;
-        }
+        final data = jsonDecode(res.body);
         setState(() {
-          _resultText = text;
+          _resultText = data['summary']; // ✅ answer → summary
           _resultIsError = false;
         });
-        _saveCache();
       } else {
         throw Exception('요약 실패: ${res.statusCode} ${res.body}');
       }
@@ -256,45 +245,7 @@ class ChatTabState extends State<ChatTab>
       _lastImage = null;
     });
     _focus.unfocus();
-
-    try {
-      final url = _buildUrl('/api/ai/diary/summary');
-      final res = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (idToken != null) 'Authorization': 'Bearer $idToken',
-        },
-        body: jsonEncode({'content': raw}),
-      );
-
-      if (res.statusCode == 200) {
-        String text;
-        try {
-          final m = jsonDecode(res.body) as Map<String, dynamic>;
-          text = (m['answer'] as String?) ?? res.body;
-        } catch (_) {
-          text = res.body;
-        }
-        setState(() {
-          _resultText = text;
-          _resultIsError = false;
-        });
-        _saveCache();
-      } else {
-        throw Exception('요약 실패: ${res.statusCode} ${res.body}');
-      }
-    } catch (e) {
-      setState(() {
-        _resultText = '일기 요약 오류: $e';
-        _resultIsError = true;
-      });
-      _saveCache();
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
   }
-
 
   // -------------------- 백엔드 URL 보정 --------------------
   Uri _buildUrl(String path) {
@@ -324,7 +275,7 @@ class ChatTabState extends State<ChatTab>
       if (res.statusCode == 200) return res.body;
       throw Exception('AI 응답 실패: ${res.statusCode} ${res.body}');
     } else {
-      final url = _buildUrl('/api/gemini/ask');
+      final url = _buildUrl('/api/ai/ask');
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (idToken != null) {
         headers['Authorization'] = 'Bearer $idToken';
@@ -334,7 +285,10 @@ class ChatTabState extends State<ChatTab>
         headers: headers,
         body: jsonEncode({'message': text}),
       );
-      if (res.statusCode == 200) return res.body;
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);     // ✅ JSON 파싱
+        return data['answer'];                 // ✅ answer 값만 반환
+      }
       throw Exception('AI 응답 실패: ${res.statusCode} ${res.body}');
     }
   }
