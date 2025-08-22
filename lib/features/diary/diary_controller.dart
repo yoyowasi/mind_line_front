@@ -1,46 +1,63 @@
+// lib/features/diary/diary_controller.dart
 import 'package:flutter/material.dart';
 import 'diary_model.dart';
 import 'diary_service.dart';
 
 class DiaryController extends ChangeNotifier {
-  final TextEditingController textController = TextEditingController();
-
+  bool _loading = false;
   List<DiaryEntry> _entries = [];
+  DiaryEntry? _latest;
+  ({DateTime date, String summary})? _latestSummary;
+
+  bool get isLoading => _loading;
   List<DiaryEntry> get entries => _entries;
+  DiaryEntry? get latest => _latest;
+  ({DateTime date, String summary})? get latestSummary => _latestSummary;
 
-  bool _isLoading = false;
-  bool get isLoading => _isLoading;
-
-  Future<void> loadDiaries() async {
-    _isLoading = true;
+  Future<void> loadInitial() async {
+    _loading = true;
     notifyListeners();
     try {
-      _entries = await DiaryService.fetchDiaryList();
-    } catch (e) {
-      // TODO: Log message: '일기 목록 로딩 실패: $e'
+      _latest = await DiaryService.getLatestDiary();
+      _latestSummary = await DiaryService.getLatestSummary();
+      _entries = await DiaryService.listRecent(days: 30);
     } finally {
-      _isLoading = false;
+      _loading = false;
       notifyListeners();
     }
   }
 
-  Future<void> submitDiary() async {
-    final text = textController.text.trim();
-    if (text.isEmpty) return;
-
-    _isLoading = true;
+  Future<void> saveDiary({
+    required DateTime date,
+    String? content,
+    String? legacyText,
+    required String mood,
+  }) async {
+    _loading = true;
     notifyListeners();
-
     try {
-      // ✅ 저장이 성공하면, 전체 목록을 다시 불러와 최신 상태를 유지
-      await DiaryService.postDiary(text);
-      await loadDiaries();
-      textController.clear();
-    } catch (e) {
-      // TODO: Log message: '일기 저장 실패: $e'
+      final saved = await DiaryService.upsertDiary(
+        date: date,
+        content: content,
+        legacyText: legacyText,
+        mood: mood,
+      );
+      // 최신/목록 갱신
+      _latest = saved.date.isAfter(_latest?.date ?? DateTime(2000)) ? saved : _latest;
+      // 목록에 동일 날짜 있으면 교체, 없으면 삽입
+      final idx = _entries.indexWhere((e) => _sameDate(e.date, saved.date));
+      if (idx >= 0) {
+        _entries[idx] = saved;
+      } else {
+        _entries.insert(0, saved);
+      }
+      notifyListeners();
     } finally {
-      _isLoading = false;
+      _loading = false;
       notifyListeners();
     }
   }
+
+  bool _sameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 }
