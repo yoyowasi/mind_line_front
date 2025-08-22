@@ -163,16 +163,21 @@ class ChatTabState extends State<ChatTab>
       // 4) 전송
       final res = await http.Response.fromStream(await req.send());
       if (res.statusCode == 200 || res.statusCode == 201) {
-        // 응답은 ExpenseEntity(JSON)라고 가정 → 보기 좋게 출력
-        String pretty;
+        String messageText;
         try {
           final obj = jsonDecode(res.body);
-          pretty = const JsonEncoder.withIndent('  ').convert(obj);
+          // 응답 객체에 message 키가 있으면 그걸 사용
+          if (obj is Map && obj.containsKey('message')) {
+            messageText = obj['message'].toString();
+          } else {
+            // fallback: 그냥 원문 출력
+            messageText = res.body;
+          }
         } catch (_) {
-          pretty = res.body;
+          messageText = res.body;
         }
         setState(() {
-          _resultText = '영수증 분석 완료:\n$pretty';
+          _resultText = messageText;  // ✅ 이제 메시지 내용만 보여줌
           _resultIsError = false;
         });
       } else {
