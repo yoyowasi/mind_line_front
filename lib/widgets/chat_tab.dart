@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:http_parser/http_parser.dart' show MediaType;
 
 import '../core/config.dart';
 
@@ -264,13 +265,33 @@ class ChatTabState extends State<ChatTab>
     final user = FirebaseAuth.instance.currentUser;
     final idToken = await user?.getIdToken();
 
+    String _extToSubtype(String path) {
+      final lower = path.toLowerCase();
+      if (lower.endsWith('.png')) return 'png';
+      if (lower.endsWith('.webp')) return 'webp';
+      if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'heic';
+      if (lower.endsWith('.gif')) return 'gif';
+      if (lower.endsWith('.bmp')) return 'bmp';
+      if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'jpeg';
+      return 'jpeg';
+    }
+
     if (imageFile != null) {
       final url = _buildUrl('/api/gemini/ask-image');
       final req = http.MultipartRequest('POST', url);
       if (idToken != null) {
         req.headers['Authorization'] = 'Bearer $idToken';
       }
-      req.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+
+      // ✅ 여기에 req.files.add(...)가 있어요.
+      req.files.add(
+        await http.MultipartFile.fromPath(
+          'image',
+          imageFile.path,
+          contentType: MediaType('image', _extToSubtype(imageFile.path)), // jpeg/png 등
+        ),
+      );
+
       final res = await http.Response.fromStream(await req.send());
       if (res.statusCode == 200) return res.body;
       throw Exception('AI 응답 실패: ${res.statusCode} ${res.body}');
