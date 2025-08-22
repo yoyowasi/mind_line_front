@@ -359,7 +359,7 @@ class ChatTabState extends State<ChatTab>
     _focus.unfocus();
 
     try {
-      final url = _buildUrl('/api/ai/calendar/add');
+      final url = _buildUrl('/api/ai/schedules/add');
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (idToken != null) headers['Authorization'] = 'Bearer $idToken';
 
@@ -421,42 +421,58 @@ class ChatTabState extends State<ChatTab>
     }
 
     if (imageFile != null) {
-      final url = _buildUrl('/api/gemini/ask-image');
+      // 이미지 라우터는 기본적으로 text/plain 반환 (혹시 JSON이면 message만 뽑음)
+      final url = _buildUrl('/api/ai/router/image');
       final req = http.MultipartRequest('POST', url);
-      if (idToken != null) {
-        req.headers['Authorization'] = 'Bearer $idToken';
-      }
-
-      // ✅ 여기에 req.files.add(...)가 있어요.
-      req.files.add(
-        await http.MultipartFile.fromPath(
-          'image',
-          imageFile.path,
-          contentType: MediaType('image', _extToSubtype(imageFile.path)), // jpeg/png 등
-        ),
-      );
-
+      if (idToken != null) req.headers['Authorization'] = 'Bearer $idToken';
+      req.headers['Accept'] = 'text/plain, application/json';
+      req.files.add(await http.MultipartFile.fromPath(
+        'image', imageFile.path,
+        contentType: MediaType('image', _extToSubtype(imageFile.path)),
+      ));
       final res = await http.Response.fromStream(await req.send());
-      if (res.statusCode == 200) return res.body;
+      if (res.statusCode == 200) {
+        final ct = (res.headers['content-type'] ?? '').toLowerCase();
+        final raw = utf8.decode(res.bodyBytes);
+        if (ct.contains('application/json')) {
+          try {
+            final obj = jsonDecode(raw);
+            if (obj is Map && obj['message'] != null) return obj['message'].toString();
+          } catch (_) {}
+        }
+        return raw;
+      }
       throw Exception('AI 응답 실패: ${res.statusCode} ${res.body}');
     } else {
-      final url = _buildUrl('/api/ai/ask');
-      final headers = <String, String>{'Content-Type': 'application/json'};
-      if (idToken != null) {
-        headers['Authorization'] = 'Bearer $idToken';
-      }
+      // ✅ 여기 수정: 라우터는 text/plain 이 기본이므로 JSON 파싱 금지(조건부)
+      final url = _buildUrl('/api/ai/router');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'text/plain, application/json',
+        if (idToken != null) 'Authorization': 'Bearer $idToken',
+      };
       final res = await http.post(
         url,
         headers: headers,
-        body: jsonEncode({'message': text}),
+        body: jsonEncode({'message': text, 'timezone': 'Asia/Seoul'}),
       );
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);     // ✅ JSON 파싱
-        return data['answer'];                 // ✅ answer 값만 반환
+        final ct = (res.headers['content-type'] ?? '').toLowerCase();
+        final raw = utf8.decode(res.bodyBytes);
+        if (ct.contains('application/json')) {
+          try {
+            final obj = jsonDecode(raw);
+            // message > answer > raw 순서로 표시
+            final m = (obj['message'] ?? obj['answer'])?.toString();
+            if (m != null && m.isNotEmpty) return m;
+          } catch (_) {/* 무시하고 raw 사용 */}
+        }
+        return raw; // text/plain 그대로
       }
       throw Exception('AI 응답 실패: ${res.statusCode} ${res.body}');
     }
   }
+
 
   // 선택된 분류를 텍스트 앞에 태그로 붙인다. (백엔드가 태그만 파싱해도 라우팅 가능)
   String _applyCategoryTag(String raw) {
