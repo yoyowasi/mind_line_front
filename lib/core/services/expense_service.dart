@@ -14,7 +14,10 @@ class ExpenseService {
     required String type,
     required DateTime time,
   }) async {
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken();
+    print('addExpense - Current user: ${user?.uid}, Token: $token');
+
     final response = await http.post(
       Uri.parse('${ApiService.baseUrl}/api/expenses'),
       headers: {
@@ -35,13 +38,17 @@ class ExpenseService {
       final data = jsonDecode(rawBody);
       return ExpenseItem.fromJson(data);
     } else {
+      print('addExpense - Error response: ${response.statusCode} ${response.body}');
       throw Exception('저장 실패: ${response.statusCode} ${response.body}');
     }
   }
 
   /// 목록 조회
   static Future<List<ExpenseItem>> fetchExpenses() async {
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken();
+    print('fetchExpenses - Current user: ${user?.uid}, Token: $token');
+
     final response = await http.get(
       Uri.parse('${ApiService.baseUrl}/api/expenses'),
       headers: {'Authorization': 'Bearer $token'},
@@ -51,6 +58,7 @@ class ExpenseService {
       final List list = jsonDecode(utf8.decode(response.bodyBytes));
       return list.map((e) => ExpenseItem.fromJson(e)).toList();
     } else {
+      print('fetchExpenses - Error response: ${response.statusCode} ${response.body}');
       throw Exception('지출/수입 내역 로딩 실패: ${response.statusCode}');
     }
   }

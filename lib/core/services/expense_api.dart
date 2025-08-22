@@ -7,8 +7,12 @@ import '../models/expense.dart';
 import '../../core/config.dart'; // Config.apiBase 가정
 
 class ExpenseApi {
-  static Future<String?> _token() async =>
-      await FirebaseAuth.instance.currentUser?.getIdToken();
+  static Future<String?> _token() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken();
+    print('ExpenseApi - Current user: ${user?.uid}, Token: $token');
+    return token;
+  }
 
   static Uri _u(String path, [Map<String, String>? q]) =>
       Uri.parse('${Config.apiBase}$path').replace(queryParameters: q);
@@ -27,6 +31,7 @@ class ExpenseApi {
       },
     );
     if (res.statusCode != 200) {
+      print('ExpenseApi.list - Error response: ${res.statusCode} ${res.body}');
       throw Exception('list failed: ${res.statusCode} ${res.body}');
     }
     final List data = jsonDecode(res.body);
