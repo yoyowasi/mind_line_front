@@ -360,10 +360,20 @@ class ChatTabState extends State<ChatTab>
     }
   }
 
-  Future<void> _pickImage() async {
+  /*Future<void> _pickImage() async {
     final picked = await _picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
       await _ask(imageFile: File(picked.path));
+    }
+  }*/
+
+  Future<void> _pickImage() async {
+    final picked = await _picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      setState(() {
+        _lastImage = File(picked.path);   // 미리보기/첨부만
+      });
+      _focus.requestFocus();               // 사용자가 텍스트 입력하도록 포커스
     }
   }
 
@@ -561,7 +571,10 @@ class ChatTabState extends State<ChatTab>
                           ScaleTransition(
                             scale: _loading ? _scale : const AlwaysStoppedAnimation(1.0),
                             child: InkWell(
-                              onTap: _loading ? null : () => _ask(text: _controller.text),
+                              onTap: _loading ? null : () => _ask(
+                                text: _controller.text,
+                                imageFile: _lastImage,   // ⬅️ 첨부된 이미지 함께 전송
+                              ),
                               borderRadius: BorderRadius.circular(999),
                               child: Container(
                                 width: 46,
