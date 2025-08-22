@@ -271,7 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return TabsReloadScope(
       onTabsReload: _reloadTabs,
       child: Scaffold(
-        appBar: AppBar(title: Text('DailyCircle - $title')),
+        appBar: AppBar(title: Text('MindLine')),
         drawer: AppDrawer(
           enabledIds: _enabled,
           onSelectTabId: _selectById,

@@ -16,11 +16,12 @@ class App extends StatelessWidget {
       animation: theme,
       builder: (context, _) {
         return MaterialApp.router(
-          title: 'AI 감정일기',
+          title: 'MinedLines',
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
           themeMode: theme.mode,
           routerConfig: appRoutes,
+          debugShowCheckedModeBanner: false,
 
           // ✅ 여기 추가
           localizationsDelegates: const [
