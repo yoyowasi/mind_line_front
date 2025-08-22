@@ -23,10 +23,11 @@ class DiaryEntry {
   });
 
   factory DiaryEntry.fromJson(Map<String, dynamic> json) {
+    final d = DateTime.parse(json['date'] as String);
     return DiaryEntry(
       id: json['id'] as String?,
       uid: json['uid'] as String? ?? '',
-      date: DateTime.parse(json['date'] as String),
+      date: DateTime(d.year, d.month, d.day), // ⬅️ 자정으로 고정
       content: json['content'] as String?,
       legacyText: json['legacyText'] as String?,
       mood: json['mood'] as String?,
@@ -47,4 +48,16 @@ class DiaryEntry {
   }
 
   String get text => content ?? legacyText ?? '';
+
+  Map<String, dynamic> toJson() => {
+        "id": id,
+        "uid": uid,
+        "date": date.toIso8601String().split('T').first,
+        "content": content,
+      "legacyText": legacyText,
+       "mood": mood,
+        "aiReply": aiReply,
+        "createdAt": createdAt?.toIso8601String(),
+        "updatedAt": updatedAt?.toIso8601String(),
+    };
 }

@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../features/diary/diary_controller.dart';
-import '../features/diary/diary_list_screen.dart';
 import '../features/diary/diary_model.dart';
 
 final _dPretty  = DateFormat('M월 d일(E)', 'ko_KR');
@@ -27,17 +26,17 @@ class _DaliyTabState extends State<DaliyTab> {
     _from = DateTime(now.year, now.month, 1);
     _to   = DateTime(now.year, now.month + 1, 0);
 
-    // 탭 진입 시 한 번만 초기 로딩
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // ✅ DB에서 바로 해당 월을 가져와 화면에
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final c = context.read<DiaryController>();
-      if (c.entries.isEmpty && !c.isLoading) {
-        c.loadInitial(recentDays: 90);
-      }
+      // 메인에서 이미 불렀어도 안전 (동일 범위면 네트워크 재호출 안함)
+      c.loadMonthOnce(_from, _to);
+      c.fetchMetaSilentlyOnce();               // 요약/최신은 뒤에서
     });
   }
 
   Future<void> _reload() async {
-    await context.read<DiaryController>().refresh(recentDays: 90);
+    await context.read<DiaryController>().refreshRange(_from, _to);
   }
 
   Future<void> _goToMonth(DateTime m) async {
@@ -45,7 +44,7 @@ class _DaliyTabState extends State<DaliyTab> {
       _from = DateTime(m.year, m.month, 1);
       _to   = DateTime(m.year, m.month + 1, 0);
     });
-    await _reload();
+    await context.read<DiaryController>().loadMonthOnce(_from, _to);
   }
 
   Future<void> _pickMonth() async {
@@ -59,9 +58,10 @@ class _DaliyTabState extends State<DaliyTab> {
     if (picked != null) {
       setState(() {
         _from = DateTime(picked.year, picked.month, 1);
-        _to = DateTime(picked.year, picked.month + 1, 0);
+        _to   = DateTime(picked.year, picked.month + 1, 0);
       });
-      await _reload();
+      await context.read<DiaryController>().loadMonthInitial(_from, _to); // ✅
+      context.read<DiaryController>().fetchMetaSilently();
     }
   }
 
@@ -69,10 +69,13 @@ class _DaliyTabState extends State<DaliyTab> {
     final next = DateTime(_from.year, _from.month + delta, 1);
     setState(() {
       _from = next;
-      _to = DateTime(next.year, next.month + 1, 0);
+      _to   = DateTime(next.year, next.month + 1, 0);
     });
-    await _reload();
+    await context.read<DiaryController>().loadMonthInitial(_from, _to); // ✅
+    context.read<DiaryController>().fetchMetaSilently();
   }
+
+
 
   void _goPrevMonth() => _goPrevNextMonth(-1);
   void _goNextMonth() => _goPrevNextMonth(1);
@@ -112,13 +115,13 @@ class _DaliyTabState extends State<DaliyTab> {
     return s.length;
   }
 
-  Future<void> _openAdd([DiaryEntry? edit]) async {
+  Future<void> _openAdd({DiaryEntry? edit, DateTime? initialDate}) async {
     final ok = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _EditDiarySheet(entry: edit),
+      builder: (_) => _EditDiarySheet(entry: edit, initialDate: initialDate),
     );
     if (ok == true && mounted) await _reload();
   }
@@ -129,7 +132,8 @@ class _DaliyTabState extends State<DaliyTab> {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _DiaryDetailSheet(entry: entry, onEdit: () => _openAdd(entry)),
+      builder: (_) => _DiaryDetailSheet(entry: entry,   onEdit: () => _openAdd(edit: entry),
+      ),
     );
   }
 
@@ -143,21 +147,35 @@ class _DaliyTabState extends State<DaliyTab> {
         initialMonth: _from,
         entries: monthList,
         onMonthChanged: (m) => _goToMonth(m),
-        onTapDay: (day) {
+        onTapDay: (day) async {
           final e = _findEntryByDate(monthList, day);
-          final mood = e == null ? '작성 없음' : _moodLabel(e.mood ?? 'NEUTRAL');
-          ScaffoldMessenger.of(rootCtx).showSnackBar(
-            SnackBar(
-              content: Text('${DateFormat('M월 d일(EEE)', 'ko_KR').format(day)} · $mood'),
-              action: e == null
-                  ? null
-                  : SnackBarAction(label: '상세', onPressed: () => _openDetail(e)),
-            ),
-          );
+          Navigator.of(rootCtx).pop(); // 달력 시트 닫기
+
+          if (e != null) {
+            // ✅ 바로 상세
+            await _openDetail(e);
+          } else {
+            // ✅ 없는 날 → 작성 유도
+            final ok = await showDialog<bool>(
+              context: rootCtx,
+              builder: (_) => AlertDialog(
+                title: const Text('일기 없음'),
+                content: Text('${DateFormat('M월 d일(E)', 'ko_KR').format(day)} 일기가 없어요.\n작성할까요?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(rootCtx, false), child: const Text('취소')),
+                  FilledButton(onPressed: () => Navigator.pop(rootCtx, true), child: const Text('작성')),
+                ],
+              ),
+            );
+            if (ok == true) {
+              await _openAdd(initialDate: day); // 지정 날짜로 작성
+            }
+          }
         },
       ),
     );
   }
+
 
   DiaryEntry? _findEntryByDate(List<DiaryEntry> list, DateTime day) {
     for (final e in list) {
@@ -173,6 +191,12 @@ class _DaliyTabState extends State<DaliyTab> {
   Widget build(BuildContext context) {
     final c  = context.watch<DiaryController>();
     final cs = Theme.of(context).colorScheme;
+
+    if (!c.isInitialized && c.isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     final monthList = _monthEntries(c.entries);
     final grouped   = _groupByDate(monthList);
@@ -261,9 +285,9 @@ class _DaliyTabState extends State<DaliyTab> {
                   children: [
                     Row(
                       children: [
-                        const Expanded(
-                          child: Text('이번 달 일기',
-                              style: TextStyle(fontWeight: FontWeight.w700)),
+                         Expanded(
+                          child: Text('${_from.month}월달 일기',
+                              style: const TextStyle(fontWeight: FontWeight.w700)),
                         ),
                         Text('${monthList.length} 건',
                             style: TextStyle(
@@ -318,7 +342,7 @@ class _DaliyTabState extends State<DaliyTab> {
             const SizedBox(height: 10),
 
             // ── 날짜 헤더 + 리스트 ───────────────────────────────────────────
-            if (grouped.isEmpty && !c.isLoading)
+            if (grouped.isEmpty && !c.isLoading && c.isInitialized)
               _EmptyView(onQuickAdd: () => _openAdd())
             else
               ...grouped.entries.map((e) {
@@ -357,7 +381,7 @@ class _DaliyTabState extends State<DaliyTab> {
                     ...items.map((x) => _DiaryTile(
                       entry: x,
                       onOpen: () => _openDetail(x),
-                      onEdit: () => _openAdd(x),
+                      onEdit: () => _openAdd(edit: x),
                       onDelete: () async {
                         final ok = await _confirmDelete(context);
                         if (ok != true) return;
@@ -797,8 +821,9 @@ class _DiaryDetailSheet extends StatelessWidget {
 }
 
 class _EditDiarySheet extends StatefulWidget {
-  const _EditDiarySheet({this.entry});
+  const _EditDiarySheet({this.entry, this.initialDate});
   final DiaryEntry? entry;
+  final DateTime? initialDate;
 
   @override
   State<_EditDiarySheet> createState() => _EditDiarySheetState();
@@ -815,8 +840,8 @@ class _EditDiarySheetState extends State<_EditDiarySheet> {
   void initState() {
     super.initState();
     if (widget.entry == null) {
-      final now = DateTime.now();
-      _date = DateTime(now.year, now.month, now.day);
+      final base = widget.initialDate ?? DateTime.now(); // ✅ 지정 날짜가 있으면 그걸 사용
+      _date = DateTime(base.year, base.month, base.day);
       _textCtrl.text = '';
       _mood = 'NEUTRAL';
     } else {

@@ -11,7 +11,21 @@ class DiaryService {
   static final DateFormat _df = DateFormat('yyyy-MM-dd');
 
   static Future<Map<String, String>> _authHeaders() async {
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    var user = FirebaseAuth.instance.currentUser;
+
+    // 콜드스타트 보정: auth 복원 기다리기 (최대 5초)
+    if (user == null) {
+      try {
+        user = await FirebaseAuth.instance
+            .authStateChanges()
+            .firstWhere((u) => u != null)
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {}
+    }
+
+    // 토큰 강제 리프레시(만료/복원 직후 대비)
+    final token = await user?.getIdToken(true);
+
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -120,26 +134,39 @@ class DiaryService {
   static Future<List<DiaryEntry>> listRange(DateTime from, DateTime to) async {
     final headers = await _authHeaders();
     final uri = Uri.parse('${ApiService.baseUrl}/api/diaries').replace(
-      queryParameters: {
-        'from': _dateStr(from),
-        'to': _dateStr(to),
-      },
+      queryParameters: {'from': _dateStr(from), 'to': _dateStr(to)},
     );
 
-    try {
-      final res = await http.get(uri, headers: headers);
-      if (res.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(res.bodyBytes)) as List;
-        final list = data.map((e) => DiaryEntry.fromJson(e)).toList()
-          ..sort((a, b) => b.date.compareTo(a.date));
-        return list;
+    Future<List<DiaryEntry>> _fallbackFetchByDay() async {
+      // ✅ from~to 범위를 하루씩 직접 조회 (오늘 기준 아님!)
+      final start = DateTime(from.year, from.month, from.day);
+      final end   = DateTime(to.year, to.month, to.day);
+      final days = end.difference(start).inDays + 1;
+
+      final futures = <Future<DiaryEntry?>>[];
+      for (int i = 0; i < days; i++) {
+        final day = start.add(Duration(days: i));
+        futures.add(getDiaryByDate(day).then((v) => v).catchError((_) => null));
       }
-      // 404/501 등: 범위 API 미구현 → 폴백
-      return listRecent(days: to.difference(from).inDays + 1);
-    } catch (_) {
-      // 네트워크 오류 시에도 폴백
-      return listRecent(days: to.difference(from).inDays + 1);
+      final results = await Future.wait(futures);
+      final list = results.whereType<DiaryEntry>().toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+      return list;
     }
+
+    final res = await http.get(uri, headers: headers);
+        if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes)) as List;
+          final list = data.map((e) => DiaryEntry.fromJson(e)).toList()
+            ..sort((a, b) => b.date.compareTo(a.date));
+          return list;
+        }
+        // ✅ 정말로 API가 미구현(404, 501)일 때만 일자별 폴백
+        if (res.statusCode == 404 || res.statusCode == 501) {
+          return _fallbackFetchByDay();
+        }
+        // 그 외(401/403/500 등)는 즉시 에러를 던져서 재시도/알림 루트로
+        throw Exception('listRange ${res.statusCode} ${utf8.decode(res.bodyBytes)}');
   }
 
   /// 삭제(날짜 기준) — 서버에 아래 엔드포인트 추가 필요:

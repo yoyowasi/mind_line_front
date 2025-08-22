@@ -5,65 +5,129 @@ import 'diary_service.dart';
 
 class DiaryController extends ChangeNotifier {
   bool _loading = false;
+  bool _initialized = false;                        // ✅ 첫 로딩 완료 여부
   List<DiaryEntry> _entries = <DiaryEntry>[];
   DiaryEntry? _latest;
   ({DateTime date, String summary})? _latestSummary;
 
+  // 현재 로드된 범위(월)
+  DateTime? _loadedFrom;
+  DateTime? _loadedTo;
+
+  // 중복 호출 방지용 in-flight Future
+  Future<void>? _inflightMonthLoad;
+  Future<void>? _inflightMeta;
+
+
   bool get isLoading => _loading;
+  bool get isInitialized => _initialized;           // ✅ 빌드에서 사용
   List<DiaryEntry> get entries => List.unmodifiable(_entries);
   DiaryEntry? get latest => _latest;
   ({DateTime date, String summary})? get latestSummary => _latestSummary;
 
-  /// 앱 시작/탭 진입 시 초기 로딩
-  Future<void> loadInitial({int recentDays = 60}) async {
+  // ---- 신규: 같은 월 범위는 한 번만 로드 ----
+  Future<void> loadMonthOnce(DateTime from, DateTime to) async {
+    // 이미 같은 범위를 로드했다면 스킵
+    if (_loadedFrom != null && _loadedTo != null) {
+      final a = _stripTime(_loadedFrom!);
+      final b = _stripTime(_loadedTo!);
+      final x = _stripTime(from);
+      final y = _stripTime(to);
+      if (a.isAtSameMomentAs(x) && b.isAtSameMomentAs(y)) {
+        return;
+      }
+    }
+
+    // 이미 로딩 중이면 그 Future를 그대로 리턴 (동시 호출 합치기)
+    if (_inflightMonthLoad != null) {
+      return _inflightMonthLoad!;
+    }
+
+    _inflightMonthLoad = _loadMonth(from, to);
+    try {
+      await _inflightMonthLoad;
+    } finally {
+      _inflightMonthLoad = null;
+    }
+  }
+
+  Future<void> _loadMonth(DateTime from, DateTime to) async {
     _setLoading(true);
     try {
-      // 병렬 요청
+      final list = await DiaryService.listRange(from, to);
+      _entries = list..sort((a, b) => b.date.compareTo(a.date));
+      _loadedFrom = _stripTime(from);
+      _loadedTo   = _stripTime(to);
+      _initialized = true;
+      notifyListeners();
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // ---- 신규: 요약/최신 메타 비동기 선로딩도 한 번만 ----
+  Future<void> fetchMetaSilentlyOnce() async {
+    if (_inflightMeta != null) return _inflightMeta!;
+    _inflightMeta = _fetchMeta();
+    try {
+      await _inflightMeta;
+    } finally {
+      _inflightMeta = null;
+    }
+  }
+
+  Future<void> _fetchMeta() async {
+    try {
       final latestF  = DiaryService.getLatestDiary();
       final summaryF = DiaryService.getLatestSummary();
-      final listF    = DiaryService.listRecent(days: recentDays);
-
       final results = await Future.wait([
         latestF.catchError((_) => null),
         summaryF.catchError((_) => null),
-        listF.catchError((_) => <DiaryEntry>[]),
       ]);
-
       _latest        = results[0] as DiaryEntry?;
       _latestSummary = results[1] as ({DateTime date, String summary})?;
-      _entries       = (results[2] as List<DiaryEntry>)
-        ..sort((a, b) => b.date.compareTo(a.date)); // 최신순 정렬
-    } finally {
-      _setLoading(false);
-    }
+      notifyListeners();
+    } catch (_) {}
   }
 
-  /// 최근만 다시 긁어와서 갱신 (간단 새로고침)
-  Future<void> refresh({int recentDays = 60}) async {
+  void _setLoading(bool v) {
+    if (_loading == v) return;
+    _loading = v; notifyListeners();
+  }
+
+  bool _sameDate(DateTime a, DateTime b)
+  => a.year == b.year && a.month == b.month && a.day == b.day;
+  DateTime _stripTime(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// ✅ 첫 진입: 월 범위만 서버에서 가져와 목록 즉시 표시 (요약/최신 비차단)
+  Future<void> loadMonthInitial(DateTime from, DateTime to) async {
+    _initialized = false;
     _setLoading(true);
     try {
-      final list = await DiaryService.listRecent(days: recentDays);
+      final list = await DiaryService.listRange(from, to);
       _entries = list..sort((a, b) => b.date.compareTo(a.date));
-      // 최신/요약도 가볍게 갱신
-      try { _latest = await DiaryService.getLatestDiary(); } catch (_) {}
-      try { _latestSummary = await DiaryService.getLatestSummary(); } catch (_) {}
+      _initialized = true;                           // ✅ 이제 Empty 보여도 됨
+      notifyListeners();
     } finally {
       _setLoading(false);
     }
   }
 
-  /// 특정 월 구간을 새로고침하고 싶을 때(서비스에 range가 없을 수도 있으므로 listRecent로 대체)
+  /// ✅ 요약/최신은 뒤에서 따로(느려도 목록 표시 안 막음)
+  Future<void> fetchMetaSilently() async {
+    try { _latest        = await DiaryService.getLatestDiary();        } catch (_) {}
+    try { _latestSummary = await DiaryService.getLatestSummary();      } catch (_) {}
+    notifyListeners();
+  }
+
+  /// 새로고침(현재 월 범위만)
   Future<void> refreshRange(DateTime from, DateTime to) async {
-    final days = to.difference(from).inDays + 1;
     _setLoading(true);
     try {
-      final list = await DiaryService.listRecent(days: days + 5); // 버퍼 포함
-      // 컨트롤러 단계에서 구간 필터링
-      bool inRange(DateTime d) =>
-          !d.isBefore(DateTime(from.year, from.month, from.day)) &&
-              !d.isAfter(DateTime(to.year, to.month, to.day, 23, 59, 59));
-      _entries = list.where((e) => inRange(e.date)).toList()
-        ..sort((a, b) => b.date.compareTo(a.date));
+      final list = await DiaryService.listRange(from, to);
+      _entries = list..sort((a, b) => b.date.compareTo(a.date));
+      _initialized = true;
+      notifyListeners();
     } finally {
       _setLoading(false);
     }
@@ -85,12 +149,10 @@ class DiaryController extends ChangeNotifier {
         mood: mood,
       );
 
-      // 최신 갱신
       if (_latest == null || saved.date.isAfter(_latest!.date)) {
         _latest = saved;
       }
 
-      // 목록에 동일 날짜 있으면 교체, 없으면 맨 앞 삽입
       final i = _entries.indexWhere((e) => _sameDate(e.date, saved.date));
       if (i >= 0) {
         _entries[i] = saved;
@@ -98,7 +160,10 @@ class DiaryController extends ChangeNotifier {
         _entries.insert(0, saved);
       }
 
-      // 최신 요약 재조회(있는 경우에만; 에러는 무시)
+      _initialized = true;
+      notifyListeners();
+
+      // 메타는 느긋하게
       try { _latestSummary = await DiaryService.getLatestSummary(); } catch (_) {}
       notifyListeners();
     } finally {
@@ -106,7 +171,7 @@ class DiaryController extends ChangeNotifier {
     }
   }
 
-  /// 날짜로 삭제(네 UI가 이 메서드 호출)
+  /// 날짜 삭제
   Future<void> deleteByDate(DateTime date) async {
     _setLoading(true);
     try {
@@ -119,7 +184,9 @@ class DiaryController extends ChangeNotifier {
             : _entries.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
       }
 
-      // 최신 요약도 혹시 바뀌었을 수 있으니 다시 조회(실패 무시)
+      _initialized = true;
+      notifyListeners();
+
       try { _latestSummary = await DiaryService.getLatestSummary(); } catch (_) {}
       notifyListeners();
     } finally {
@@ -127,7 +194,6 @@ class DiaryController extends ChangeNotifier {
     }
   }
 
-  /// id로 삭제가 필요할 때 UI에서 선택적으로 사용
   Future<void> deleteById(String id) async {
     _setLoading(true);
     try {
@@ -140,38 +206,13 @@ class DiaryController extends ChangeNotifier {
             : _entries.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
       }
 
+      _initialized = true;
+      notifyListeners();
+
       try { _latestSummary = await DiaryService.getLatestSummary(); } catch (_) {}
       notifyListeners();
     } finally {
       _setLoading(false);
     }
-  }
-
-  /// 최신만 별도로
-  Future<void> refreshLatest() async {
-    try {
-      _latest = await DiaryService.getLatestDiary();
-      notifyListeners();
-    } catch (_) {}
-  }
-
-  /// 최신 요약만 별도로
-  Future<void> refreshLatestSummary() async {
-    try {
-      _latestSummary = await DiaryService.getLatestSummary();
-      notifyListeners();
-    } catch (_) {}
-  }
-
-  // ─────────── 유틸 ───────────
-  bool _sameDate(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-
-  DateTime _stripTime(DateTime d) => DateTime(d.year, d.month, d.day);
-
-  void _setLoading(bool v) {
-    if (_loading == v) return;
-    _loading = v;
-    notifyListeners();
   }
 }

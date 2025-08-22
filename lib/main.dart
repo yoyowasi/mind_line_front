@@ -30,7 +30,16 @@ void main() async {
       providers: [
         // ✅ 앱 시작 시 최근 일기 + 최근 분석 요약 + 목록까지 한 번에 로드
         ChangeNotifierProvider(
-          create: (_) => DiaryController()..loadInitial(),
+          create: (_) {
+            final c = DiaryController();
+            final now = DateTime.now();
+            final from = DateTime(now.year, now.month, 1);
+            final to   = DateTime(now.year, now.month + 1, 0);
+            // 둘 다 호출해도 컨트롤러가 중복 방지
+            c.loadMonthOnce(from, to);
+            c.fetchMetaSilentlyOnce();
+            return c;
+          },
         ),
         ChangeNotifierProvider(
           create: (_) => ExpenseController()..loadExpenses(),
