@@ -1,3 +1,4 @@
+// /mnt/data/expense_controller.dart
 import 'package:flutter/material.dart';
 
 import '../core/models/expense_model.dart';
@@ -13,7 +14,7 @@ class ExpenseController extends ChangeNotifier {
   String? _lastError;
   String? get lastError => _lastError;
 
-  /// ✅ [추가된 기능] UI에서 호출하여 새 내역을 추가하는 함수
+  /// UI에서 호출하여 새 내역을 추가
   Future<bool> addExpense({
     required String category,
     required String description,
@@ -29,26 +30,24 @@ class ExpenseController extends ChangeNotifier {
         type: type,
         time: time,
       );
-      // 저장이 성공하면 전체 목록을 새로고침하여 즉시 반영
+      // 성공 시 목록 갱신
       await loadExpenses();
-      _lastError = null; // Clear previous error on success
-      return true; // 성공 여부 반환
+      _lastError = null;
+      return true;
     } catch (e) {
-      _lastError = e.toString(); // Store the error message
-      print('지출/수입 추가 실패: $e');
-      return false; // 실패 여부 반환
+      _lastError = e.toString();
+      return false;
     }
   }
 
-  /// 기존 데이터 로딩 함수
+  /// 목록 로딩
   Future<void> loadExpenses() async {
     _isLoading = true;
     notifyListeners();
     try {
       _items = await ExpenseService.fetchExpenses();
     } catch (e) {
-      print(e);
-      _items = []; // 오류 발생 시 빈 목록으로 초기화
+      _items = [];
     } finally {
       _isLoading = false;
       notifyListeners();

@@ -1,7 +1,16 @@
-import 'package:intl/intl.dart'; // ✅✅✅ 'package:' 빠진 부분 수정
+// /mnt/data/expense.dart
+import 'package:intl/intl.dart';
 
 enum ExpenseCategory {
-  FOOD, TRANSPORT, HEALTH, ENTERTAINMENT, EDUCATION, SHOPPING, TRAVEL, TAXES, OTHER
+  FOOD,
+  TRANSPORT,
+  HEALTH,
+  ENTERTAINMENT,
+  EDUCATION,
+  SHOPPING,
+  TRAVEL,
+  TAXES,
+  OTHER,
 }
 
 class Expense {
@@ -21,7 +30,7 @@ class Expense {
     this.memo,
   });
 
-  // UI 호환성을 위해 기존 date getter는 유지합니다.
+  // UI 호환을 위해 기존 getter 유지
   DateTime get date => dateTime;
 
   factory Expense.fromJson(Map<String, dynamic> j) {
@@ -33,7 +42,6 @@ class Expense {
 
     return Expense(
       id: (j['id'] ?? j['_id'] ?? '').toString(),
-      // ✅ 서버에서 오는 'dateTime' 필드를 직접 파싱합니다.
       dateTime: DateTime.parse(j['dateTime'] as String),
       amount: (j['amount'] as num).toDouble(),
       currency: (j['currency'] ?? 'KRW').toString(),
@@ -42,6 +50,7 @@ class Expense {
     );
   }
 
+  /// 생성 요청용 JSON (백엔드 요구 포맷: date, time 분리)
   Map<String, dynamic> toJsonCreate() {
     final df = DateFormat('yyyy-MM-dd');
     final tf = DateFormat('HH:mm');

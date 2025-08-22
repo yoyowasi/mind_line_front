@@ -1,3 +1,4 @@
+// /mnt/data/expense_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,7 +6,7 @@ import '../../core/services/api_service.dart';
 import '../models/expense_model.dart';
 
 class ExpenseService {
-  /// ✅ [추가된 기능] 새로운 지출/수입 내역을 서버에 저장
+  /// 새로운 지출/수입 내역을 서버에 저장
   static Future<ExpenseItem> addExpense({
     required String category,
     required String description,
@@ -29,23 +30,21 @@ class ExpenseService {
       }),
     );
 
-    if (response.statusCode == 201) { // 201 Created
+    if (response.statusCode == 201) {
       final rawBody = utf8.decode(response.bodyBytes);
-      print('Raw server response body: $rawBody'); // Print raw body
       final data = jsonDecode(rawBody);
-      print('Parsed data from server: $data'); // Print parsed data
       return ExpenseItem.fromJson(data);
     } else {
       throw Exception('저장 실패: ${response.statusCode} ${response.body}');
     }
   }
 
-  /// 기존의 목록 조회 함수
+  /// 목록 조회
   static Future<List<ExpenseItem>> fetchExpenses() async {
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     final response = await http.get(
       Uri.parse('${ApiService.baseUrl}/api/expenses'),
-      headers: { 'Authorization': 'Bearer $token' },
+      headers: {'Authorization': 'Bearer $token'},
     );
 
     if (response.statusCode == 200) {
