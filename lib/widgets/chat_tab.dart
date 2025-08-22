@@ -31,6 +31,8 @@ class ChatTabState extends State<ChatTab>
   bool _resultIsError = false;
   File? _lastImage; // 최근 보낸 이미지(미리보기)
   Timer? _debounce;
+  File? _attachImage;
+
 
   // --- 임시 분류 상태 ---
   _Cat _selectedCat = _Cat.none;
@@ -114,6 +116,91 @@ class ChatTabState extends State<ChatTab>
     _cachedLastImagePath =
     ps.readState(context, identifier: 'chat.$uid.lastImage') as String?;
   }
+
+  Future<void> _scanReceipt() async {
+    // 1) 이미지 선택
+    final picked = await _picker.pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+
+    final file = File(picked.path);
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+    final uid = user?.uid ?? 'anon';
+
+    setState(() {
+      _loading = true;
+      _resultText = null;
+      _resultIsError = false;
+    });
+
+    try {
+      final url = _buildUrl('/api/expenses/scan');
+      final req = http.MultipartRequest('POST', url);
+
+      if (idToken != null) {
+        req.headers['Authorization'] = 'Bearer $idToken';
+      }
+
+      // 2) 필수/옵션 필드
+      req.fields['uid'] = uid;
+      req.fields['currencyDefault'] = 'KRW'; // 기본 통화 (한국 기준)
+      final memo = _controller.text.trim();
+      if (memo.isNotEmpty) {
+        req.fields['memo'] = memo;
+      }
+      // category는 선택값 → 필요시 req.fields['category'] = 'FOOD' 등으로 추가
+
+      // 3) 이미지 파트 (서버 @RequestPart("image"))
+      final subtype = _extToSubtype(file.path);
+      req.files.add(
+        await http.MultipartFile.fromPath(
+          'image',
+          file.path,
+          contentType: MediaType('image', subtype),
+        ),
+      );
+
+      // 4) 전송
+      final res = await http.Response.fromStream(await req.send());
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        // 응답은 ExpenseEntity(JSON)라고 가정 → 보기 좋게 출력
+        String pretty;
+        try {
+          final obj = jsonDecode(res.body);
+          pretty = const JsonEncoder.withIndent('  ').convert(obj);
+        } catch (_) {
+          pretty = res.body;
+        }
+        setState(() {
+          _resultText = '영수증 분석 완료:\n$pretty';
+          _resultIsError = false;
+        });
+      } else {
+        throw Exception('영수증 분석 실패: ${res.statusCode} ${res.body}');
+      }
+    } catch (e) {
+      setState(() {
+        _resultText = '영수증 분석 오류: $e';
+        _resultIsError = true;
+      });
+    } finally {
+      _saveCache();
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+// 파일 확장자 → MIME subtype 매핑(helper)
+  String _extToSubtype(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) return 'png';
+    if (lower.endsWith('.webp')) return 'webp';
+    if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'heic';
+    if (lower.endsWith('.gif')) return 'gif';
+    if (lower.endsWith('.bmp')) return 'bmp';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'jpeg';
+    return 'jpeg';
+  }
+
 
   @override
   void didChangeDependencies() {
@@ -356,24 +443,22 @@ class ChatTabState extends State<ChatTab>
       });
       _saveCache(); // ✅ 오류도 최근값으로 보관(원하면 생략 가능)
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _attachImage = null;
+          _loading = false;
+        });
+      }
     }
   }
-
-  /*Future<void> _pickImage() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      await _ask(imageFile: File(picked.path));
-    }
-  }*/
 
   Future<void> _pickImage() async {
     final picked = await _picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
       setState(() {
-        _lastImage = File(picked.path);   // 미리보기/첨부만
+        _attachImage = File(picked.path);  // ✅ 답변창이 아니라 “입력용 첨부”에만 세팅
       });
-      _focus.requestFocus();               // 사용자가 텍스트 입력하도록 포커스
+      _focus.requestFocus();               // 키보드 올려서 바로 텍스트 입력 가능
     }
   }
 
@@ -412,7 +497,7 @@ class ChatTabState extends State<ChatTab>
     final bg2 =
     isDark ? cs.surface : cs.tertiaryContainer.withAlpha(71);
 
-    final showQuickChips = !_loading && _resultText == null && _lastImage == null;
+    final showQuickChips = !_loading && _resultText == null && _attachImage == null;
 
     return GestureDetector(
       onTap: () => _focus.unfocus(),
@@ -528,6 +613,11 @@ class ChatTabState extends State<ChatTab>
                             icon: const Icon(Icons.note_alt_outlined),
                             label: const Text('텍스트로 요약'),
                           ),
+                          OutlinedButton.icon(
+                            onPressed: _loading ? null : _scanReceipt,
+                            icon: const Icon(Icons.receipt_long),
+                            label: const Text('영수증 분석'),
+                          ),
                         ],
                       ),
                     ),
@@ -564,7 +654,7 @@ class ChatTabState extends State<ChatTab>
                                 border: InputBorder.none,
                               ),
                               style: TextStyle(color: cs.onSurface),
-                              onSubmitted: (v) => _ask(text: v),
+                              onSubmitted: (v) => _ask(text: v, imageFile: _attachImage),
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -573,7 +663,7 @@ class ChatTabState extends State<ChatTab>
                             child: InkWell(
                               onTap: _loading ? null : () => _ask(
                                 text: _controller.text,
-                                imageFile: _lastImage,   // ⬅️ 첨부된 이미지 함께 전송
+                                imageFile: _attachImage,
                               ),
                               borderRadius: BorderRadius.circular(999),
                               child: Container(
@@ -602,6 +692,39 @@ class ChatTabState extends State<ChatTab>
                         ],
                       ),
                     ),
+                    if (_attachImage != null) ...[
+                      const SizedBox(height: 8),
+                      _Glass(
+                        radius: 16,
+                        padding: const EdgeInsets.all(8),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                _attachImage!,
+                                width: 56,
+                                height: 56,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '이미지 첨부됨',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: '첨부 제거',
+                              icon: const Icon(Icons.close),
+                              onPressed: () => setState(() => _attachImage = null),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     // 빠른 예시 칩
                     const SizedBox(height: 10),
@@ -675,12 +798,7 @@ class ChatTabState extends State<ChatTab>
                                 ],
                               ),
                               const SizedBox(height: 10),
-                              if (_lastImage != null)
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.file(_lastImage!, height: 140),
-                                ),
-                              if (_lastImage != null) const SizedBox(height: 10),
+
                               if (_loading)
                                 const Center(
                                   child: Padding(
