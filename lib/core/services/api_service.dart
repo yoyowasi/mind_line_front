@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // ✅ 이 부분을 실제 서버 IP 주소로 변경해주세요.
-  static const String baseUrl = 'http://172.16.5.216:8080'; // 'http://YOUR_SERVER_URL' -> 실제 IP
+  static const String baseUrl = 'http://127.0.0.1:8080'; // 'http://YOUR_SERVER_URL' -> 실제 IP
 
   static Future<http.Response> post(String path, dynamic body) async {
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
