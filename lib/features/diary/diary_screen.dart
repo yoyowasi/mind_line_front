@@ -1,71 +1,111 @@
+// lib/features/diary/diary_screen.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../widgets/emotion_chart.dart';
 import 'diary_controller.dart';
 
-class DiaryScreen extends StatelessWidget {
+class DiaryScreen extends StatefulWidget {
   const DiaryScreen({super.key});
+  @override
+  State<DiaryScreen> createState() => _DiaryScreenState();
+}
+
+class _DiaryScreenState extends State<DiaryScreen> {
+  final _textCtrl = TextEditingController();
+  String _mood = 'NEUTRAL';
+  DateTime _date = DateTime.now();
+
+  @override
+  void dispose() {
+    _textCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final controller = Provider.of<DiaryController>(context);
+    final c = context.watch<DiaryController>();
+    final summary = c.latestSummary?.summary ?? '';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('감정 일기')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
+      appBar: AppBar(title: const Text('일기 작성/요약')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text('오늘의 일기',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('최근 요약', style: Theme.of(context).textTheme.titleMedium),
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 12, top: 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(summary.isEmpty ? '요약 없음' : summary),
             ),
-            const SizedBox(height: 8),
-
-            // 🔹 연결된 텍스트 필드
+            // Diary 입력창 (DaliyTab 등)
             TextField(
-              controller: controller.textController,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                hintText: '오늘 있었던 일을 입력하세요...',
-                border: OutlineInputBorder(),
+              controller: _textCtrl,
+              minLines: 5,
+              maxLines: 10,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface, // 본문 색상
               ),
-            ),
-            const SizedBox(height: 20),
-
-            // 🔹 전송 버튼
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: controller.isLoading ? null : controller.submitDiary,
-                child: controller.isLoading
-                    ? const CircularProgressIndicator()
-                    : const Text('분석하고 저장하기'),
-              ),
-            ),
-            const SizedBox(height: 30),
-
-            // 🔹 감정 분석 결과
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text('분석 결과',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(height: 8),
-
-            if (controller.entries.isNotEmpty)
-              Card(
-                elevation: 2,
-                color: const Color(0xFFE8F0FE),
-                child: ListTile(
-                  title: Text('감정: ${controller.entries.first.emotion}'),
-                  subtitle: Text(
-                    '내용: ${controller.entries.first.text}',
-                  ),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                hintText: '오늘의 일기를 작성하세요...',
+                hintStyle: TextStyle(
+                  color: Theme.of(context).hintColor.withOpacity(0.8), // 힌트 대비 강화
                 ),
               ),
-            EmotionChart(entries: controller.entries),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                DropdownButton<String>(
+                  value: _mood,
+                  items: const [
+                    DropdownMenuItem(value: 'HAPPY', child: Text('HAPPY')),
+                    DropdownMenuItem(value: 'SAD', child: Text('SAD')),
+                    DropdownMenuItem(value: 'ANGRY', child: Text('ANGRY')),
+                    DropdownMenuItem(value: 'NEUTRAL', child: Text('NEUTRAL')),
+                  ],
+                  onChanged: (v) => setState(() => _mood = v ?? 'NEUTRAL'),
+                ),
+                const Spacer(),
+                Text(DateFormat('yyyy-MM-dd').format(_date)),
+                IconButton(
+                  icon: const Icon(Icons.calendar_today),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _date,
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) setState(() => _date = picked);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: c.isLoading
+                  ? null
+                  : () async {
+                await context.read<DiaryController>().saveDiary(
+                  date: _date,
+                  content: _textCtrl.text.trim(),
+                  mood: _mood,
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('저장했습니다.')),
+                  );
+                }
+              },
+              child: c.isLoading ? const CircularProgressIndicator() : const Text('저장'),
+            ),
           ],
         ),
       ),
