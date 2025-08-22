@@ -391,6 +391,99 @@ class ChatTabState extends State<ChatTab>
     }
   }
 
+  // 자연어 → 일기 저장 호출 (AI가 날짜/무드 추론)
+  // 입력창 텍스트를 바로 일기로 저장 (서버: POST /api/diaries)
+// - date: 태그 없으면 오늘(yyyy-MM-dd)
+// - mood: 태그 없으면 NEUTRAL
+  Future<void> _addDiaryFromText() async {
+    final raw = _controller.text.trim();
+    if (raw.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('일기 내용을 입력해 주세요.')),
+      );
+      return;
+    }
+
+    // --- 간단 태그 파싱(선택) ---
+    // 예) [date:2025-08-23] [mood:GOOD]
+    String content = raw;
+    String? dateTag;
+    String? moodTag;
+
+    final dateRe = RegExp(r'\[date:\s*(\d{4}-\d{2}-\d{2})\s*\]', caseSensitive: false);
+    final moodRe = RegExp(r'\[mood:\s*(VERY_GOOD|GOOD|NEUTRAL|BAD|VERY_BAD)\s*\]', caseSensitive: false);
+
+    final dm = dateRe.firstMatch(content);
+    if (dm != null) {
+      dateTag = dm.group(1);
+      content = content.replaceFirst(dm.group(0)!, '').trim();
+    }
+    final mm = moodRe.firstMatch(content);
+    if (mm != null) {
+      moodTag = mm.group(1)!.toUpperCase();
+      content = content.replaceFirst(mm.group(0)!, '').trim();
+    }
+
+    // 기본값
+    String _yyyyMMdd(DateTime d) =>
+        '${d.year.toString().padLeft(4,'0')}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
+    final dateStr = dateTag ?? _yyyyMMdd(DateTime.now());
+    final moodStr = moodTag ?? 'NEUTRAL';
+
+    // 서버가 요구하는 스키마:
+    // { date: LocalDate(yyyy-MM-dd), content or legacyText, mood: enum }
+    final payload = {
+      'date': dateStr,
+      'content': content,
+      'mood': moodStr,
+    };
+
+    final user = FirebaseAuth.instance.currentUser;
+    final idToken = await user?.getIdToken();
+
+    setState(() {
+      _loading = true;
+      _resultText = null;
+      _resultIsError = false;
+      _lastImage = null;
+    });
+    _focus.unfocus();
+
+    try {
+      final url = _buildUrl('/api/diaries'); // ✅ 올바른 경로
+      final res = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (idToken != null) 'Authorization': 'Bearer $idToken',
+        },
+        body: jsonEncode(payload),
+      );
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        setState(() {
+          _resultText = '일기 저장 완료 (${dateStr})';
+          _resultIsError = false;
+        });
+        _controller.clear();
+        _selectedCat = _Cat.none;
+      } else {
+        throw Exception('일기 저장 실패: ${res.statusCode} ${res.body}');
+      }
+    } catch (e) {
+      setState(() {
+        _resultText = '일기 저장 오류: $e';
+        _resultIsError = true;
+      });
+    } finally {
+      _saveCache();
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+
+
 
   // -------------------- 백엔드 URL 보정 --------------------
   Uri _buildUrl(String path) {
@@ -664,22 +757,10 @@ class ChatTabState extends State<ChatTab>
                             icon: const Icon(Icons.today),
                             label: const Text('오늘 일기 요약'),
                           ),
-                          OutlinedButton.icon(
-                            onPressed: _loading
-                                ? null
-                                : () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: DateTime.now(),
-                                firstDate: DateTime(2023),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
-                              );
-                              if (picked != null) {
-                                await _summarizeDiaryByDate(picked);
-                              }
-                            },
-                            icon: const Icon(Icons.event),
-                            label: const Text('다른 날짜 요약'),
+                      OutlinedButton.icon(
+                        onPressed: _loading ? null : _addDiaryFromText,
+                        icon: const Icon(Icons.book_outlined),
+                        label: const Text('일기'),
                           ),
                           OutlinedButton.icon(
                             onPressed: _loading ? null : _addScheduleFromText,

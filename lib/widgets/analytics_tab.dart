@@ -413,7 +413,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             const _SectionTitle('지출 상위 카테고리'),
             _Glass(
               padding: const EdgeInsets.all(12),
-              child: SizedBox(height: 200, child: _expenseDonut(cs)),
+              child: SizedBox(height: 250, child: _expenseDonut(cs)),
             ),
 
             const SizedBox(height: 14),
@@ -1123,10 +1123,13 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     final total = items.fold<double>(0, (p, e) => p + e.value);
     final palette = [cs.primary, Colors.teal, Colors.orange, Colors.purple, Colors.indigo, Colors.brown, Colors.cyan, Colors.deepOrange];
 
-    return Column(
-      children: [
-        SizedBox(
-          height: 160,
+    return LayoutBuilder(builder: (_, box) {
+         final chartH = (box.maxWidth * 0.55).clamp(140.0, 200.0);
+         return Column(
+           mainAxisSize: MainAxisSize.min,
+           children: [
+             SizedBox(
+               height: chartH,
           child: PieChart(
             PieChartData(
               sectionsSpace: 4,
@@ -1144,8 +1147,8 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
-        Wrap(
+             const SizedBox(height: 8),
+             Wrap(
           spacing: 10,
           runSpacing: -6,
           children: [
@@ -1156,9 +1159,10 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                 Text('${items[i].key} ${_shortMoney(items[i].value)}'),
               ]),
           ],
-        ),
+             )
       ],
-    );
+     );
+    });
   }
 
   /// 기분↔지출 산점도 (툴팁 단순화: 터치 활성화만)
