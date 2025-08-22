@@ -102,8 +102,12 @@ class _DaliyTabState extends State<DaliyTab> {
                 onPressed: controller.isLoading
                     ? null
                     : () async {
+                  // ✅ 수정된 부분: 시간 정보를 제거한 날짜 객체를 생성합니다.
+                  final now = DateTime.now();
+                  final today = DateTime(now.year, now.month, now.day);
+
                   await controller.saveDiary(
-                    date: DateTime.now(),
+                    date: today, // 수정된 today 변수를 사용합니다.
                     content: _textCtrl.text.trim(),
                     mood: _mood,
                   );
