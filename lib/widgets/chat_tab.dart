@@ -313,12 +313,31 @@ class ChatTabState extends State<ChatTab>
     }
   }
 
-  /// 입력창의 텍스트를 원문으로 POST 요약 (/api/ai/diary/summary)
-  Future<void> _summarizeDiaryFromInput() async {
+  Map<String, dynamic>? _decodeJwtPayload(String? jwt) {
+    if (jwt == null || !jwt.contains('.')) return null;
+    try {
+      final payload = jwt.split('.')[1];
+      final normalized = base64Url.normalize(payload);
+      final jsonStr = utf8.decode(base64Url.decode(normalized));
+      return jsonDecode(jsonStr) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+// 24자리 16진수 ObjectId 형태인지 체크
+  bool _looksLikeObjectId(String s) {
+    final re = RegExp(r'^[0-9a-fA-F]{24}$');
+    return re.hasMatch(s);
+  }
+
+// 자연어 → 캘린더 추가 호출
+  // NEW: 일정 추가 전용 호출 (userId 안 보냄!)
+  Future<void> _addScheduleFromText() async {
     final raw = _controller.text.trim();
     if (raw.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('요약할 텍스트를 입력해 주세요.')),
+        const SnackBar(content: Text('일정을 자연어로 입력해 주세요. 예) 내일 오후 2시 회의 1시간')),
       );
       return;
     }
@@ -333,7 +352,40 @@ class ChatTabState extends State<ChatTab>
       _lastImage = null;
     });
     _focus.unfocus();
+
+    try {
+      final url = _buildUrl('/api/ai/calendar/add');
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (idToken != null) headers['Authorization'] = 'Bearer $idToken';
+
+      // timezone은 서버 기본(Asia/Seoul)을 쓰고 싶으면 아예 빼도 됩니다.
+      final body = jsonEncode(<String, dynamic>{
+        'message': raw,
+        // 'timezone': 'Asia/Seoul', // 필요 시 주석 해제
+      });
+
+      final res = await http.post(url, headers: headers, body: body);
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        // { message, calendarId }
+        setState(() {
+          _resultText = data['message'] as String? ?? '일정이 등록되었습니다.';
+          _resultIsError = false;
+        });
+      } else {
+        throw Exception('일정 추가 실패: ${res.statusCode} ${res.body}');
+      }
+    } catch (e) {
+      setState(() {
+        _resultText = '일정 추가 오류: $e';
+        _resultIsError = true;
+      });
+    } finally {
+      _saveCache();
+      if (mounted) setState(() => _loading = false);
+    }
   }
+
 
   // -------------------- 백엔드 URL 보정 --------------------
   Uri _buildUrl(String path) {
@@ -609,9 +661,9 @@ class ChatTabState extends State<ChatTab>
                             label: const Text('다른 날짜 요약'),
                           ),
                           OutlinedButton.icon(
-                            onPressed: _loading ? null : _summarizeDiaryFromInput,
+                            onPressed: _loading ? null : _addScheduleFromText,
                             icon: const Icon(Icons.note_alt_outlined),
-                            label: const Text('텍스트로 요약'),
+                            label: const Text('일정'),
                           ),
                           OutlinedButton.icon(
                             onPressed: _loading ? null : _scanReceipt,
