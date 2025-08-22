@@ -46,7 +46,13 @@ class _ExpenseTabState extends State<ExpenseTab> {
     return _MonthData(ex, inc, budget);
   }
 
-  Future<void> _reload() async => setState(() => _future = _load());
+  Future<void> _reload() async {
+    final newFuture = _load();
+    setState(() {
+      _future = newFuture;
+    });
+    await newFuture;
+  }
 
   Future<void> _pickMonth() async {
     final picked = await showDatePicker(
@@ -760,14 +766,16 @@ class _AddEntrySheetState extends State<_AddEntrySheet> {
     final i = widget.editIncome;
     if (e != null) {
       _isIncome = false;
-      _date = DateTime(e.date.year, e.date.month, e.date.day);
+      // ✅ [최종 수정 1] 기존의 DateTime 객체를 그대로 사용하여 시간 정보를 보존합니다.
+      _date = e.date;
       _amountCtrl.text = _n.format(e.amount.toInt());
       _currency = e.currency;
       _expCat = e.category;
       _memoCtrl.text = e.memo ?? '';
     } else if (i != null) {
       _isIncome = true;
-      _date = DateTime(i.date.year, i.date.month, i.date.day);
+      // ✅ [최종 수정 1] 기존의 DateTime 객체를 그대로 사용하여 시간 정보를 보존합니다.
+      _date = i.date;
       _amountCtrl.text = _n.format(i.amount.toInt());
       _currency = i.currency;
       _incCat = i.category;
@@ -780,46 +788,39 @@ class _AddEntrySheetState extends State<_AddEntrySheet> {
     setState(() => _submitting = true);
     try {
       final amount = double.parse(_amountCtrl.text.replaceAll(',', ''));
-      DateTime _compose(DateTime base, {DateTime? keep}) {
-        final src = keep ?? DateTime.now();
-        return DateTime(base.year, base.month, base.day, src.hour, src.minute);
-      }
 
+      // ✅✅✅ 핵심 수정: date: -> dateTime: 으로 변경
       if (widget.editExpense != null) {
-        final dt = _compose(_date, keep: widget.editExpense!.date);
         await ExpenseApi.update(
           widget.editExpense!.id,
-          date: dt, // ← 날짜+시각
+          date: _date, // update API는 date를 받아 내부에서 dateTime으로 변환합니다.
           amount: amount,
           currency: _currency,
           category: _expCat,
           memo: _memoCtrl.text.isEmpty ? null : _memoCtrl.text,
         );
       } else if (widget.editIncome != null) {
-        final dt = _compose(_date, keep: widget.editIncome!.date);
         await IncomeApi.update(
           widget.editIncome!.id,
-          date: dt,
+          date: _date, // update API는 date를 받아 내부에서 dateTime으로 변환합니다.
           amount: amount,
           currency: _currency,
           category: _incCat,
           memo: _memoCtrl.text.isEmpty ? null : _memoCtrl.text,
         );
       } else if (_isIncome) {
-        final dt = _compose(_date); // 신규는 현재 시각
         await IncomeApi.create(Income(
           id: '',
-          date: dt,
+          dateTime: _date, // 생성 시에는 dateTime으로 전달
           amount: amount,
           currency: _currency,
           category: _incCat,
           memo: _memoCtrl.text.isEmpty ? null : _memoCtrl.text,
         ));
       } else {
-        final dt = _compose(_date);
         await ExpenseApi.create(Expense(
           id: '',
-          date: dt,
+          dateTime: _date, // 생성 시에는 dateTime으로 전달
           amount: amount,
           currency: _currency,
           category: _expCat,
@@ -827,7 +828,7 @@ class _AddEntrySheetState extends State<_AddEntrySheet> {
         ));
       }
 
-      if (mounted) Navigator.pop(context, true); // 닫히면 부모가 즉시 _reload
+      if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnBar('저장 실패: $e'));
@@ -908,13 +909,29 @@ class _AddEntrySheetState extends State<_AddEntrySheet> {
                 const Spacer(),
                 TextButton.icon(
                   icon: const Icon(Icons.event),
-                  label: Text(DateFormat('yyyy-MM-dd').format(_date)),
+                  label: Text(DateFormat('yyyy-MM-dd HH:mm').format(_date)),
+                  // ✅ [최종 수정 2] 날짜와 시간을 모두 선택/수정하는 로직
                   onPressed: () async {
-                    final picked = await showDatePicker(
+                    final pickedDate = await showDatePicker(
                       context: context,
-                      initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100),
+                      initialDate: _date,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
                     );
-                    if (picked != null) setState(() => _date = picked);
+                    if (pickedDate == null) return;
+                    if (!mounted) return;
+
+                    final pickedTime = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(_date),
+                    );
+
+                    setState(() {
+                      _date = pickedDate.copyWith(
+                        hour: pickedTime?.hour ?? _date.hour,
+                        minute: pickedTime?.minute ?? _date.minute,
+                      );
+                    });
                   },
                 ),
               ],

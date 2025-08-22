@@ -73,13 +73,19 @@ final Map<String, TabDefinition> kAllTabs = {
 };
 
 List<BottomNavigationBarItem> buildBottomItemsFromEnabled(List<String> enabled) {
-  final ids = enabled.take(TabConfig.bottomBaseCount);
-  return ids.map((id) {
+  // 존재하는 탭만 안전하게 사용
+  final existing = enabled.where(kAllTabs.containsKey).toList(growable: false);
+  final ids = existing.take(TabConfig.bottomBaseCount);
+  return ids
+      .map((id) {
     final def = kAllTabs[id]!;
     return BottomNavigationBarItem(icon: Icon(def.icon), label: def.label);
-  }).toList(growable: false);
+  })
+      .toList(growable: false);
 }
 
 List<Widget> buildPagesFromEnabled(BuildContext context, List<String> enabled) {
-  return enabled.map((id) => kAllTabs[id]!.builder(context)).toList(growable: false);
+  // 존재하지 않는 탭 ID가 들어와도 크래시 방지
+  final existing = enabled.where(kAllTabs.containsKey);
+  return existing.map((id) => kAllTabs[id]!.builder(context)).toList(growable: false);
 }

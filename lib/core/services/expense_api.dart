@@ -1,9 +1,10 @@
+// /mnt/data/expense_api.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/expense.dart';
-import '../../core/config.dart'; // Config.apiBase 존재 가정
+import '../../core/config.dart'; // Config.apiBase 가정
 
 class ExpenseApi {
   static Future<String?> _token() async =>
@@ -15,7 +16,7 @@ class ExpenseApi {
   static final _df = DateFormat('yyyy-MM-dd');
   static final _tf = DateFormat('HH:mm');
 
-  /// 월 범위 목록 조회
+  /// 목록 조회 (기간)
   static Future<List<Expense>> list(DateTime from, DateTime to) async {
     final token = await _token();
     final res = await http.get(
@@ -35,7 +36,7 @@ class ExpenseApi {
   /// 생성 (date, time 분리 전송)
   static Future<Expense> create(Expense newOne) async {
     final token = await _token();
-    final body = newOne.toJsonCreate(); // {"date":"YYYY-MM-DD","time":"HH:mm",...}
+    final body = newOne.toJsonCreate();
     final res = await http.post(
       _u('/api/expenses'),
       headers: {
@@ -76,7 +77,7 @@ class ExpenseApi {
     final body = <String, dynamic>{};
     if (date != null) {
       body['date'] = df.format(date);
-      body['time'] = tf.format(date); // ★ 추가: 시간도 전송
+      body['time'] = tf.format(date);
     }
     if (amount != null) body['amount'] = amount;
     if (currency != null) body['currency'] = currency;
