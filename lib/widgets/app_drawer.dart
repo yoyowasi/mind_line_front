@@ -26,7 +26,7 @@ class AppDrawer extends StatelessWidget {
           padding: EdgeInsets.zero,
           children: [
 
-            const DrawerHeader(child: Text('DailyCircle', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
+            const DrawerHeader(child: Text('MindLine', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
             for (final id in idsInMenu)
               ListTile(
                 leading: Icon(kAllTabs[id]!.icon),
