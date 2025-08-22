@@ -32,7 +32,9 @@
             android:icon="@mipmap/ic_launcher"
             android:usesCleartextTraffic="true"
             android:allowBackup="true"
-            android:supportsRtl="true">
+            android:supportsRtl="true"
+            android:enableOnBackInvokedCallback="true"
+            >
 
         <!-- Flutter 기본 Activity -->
         <activity
